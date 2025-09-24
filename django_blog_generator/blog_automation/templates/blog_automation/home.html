@@ -1,0 +1,248 @@
+{% extends 'blog_automation/base.html' %} {% block title %}SEO Blog Generator -
+Home{% endblock %} {% block content %}
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title mb-0">
+          <i class="fas fa-plus-circle me-2"></i>Generate New Blog
+        </h3>
+      </div>
+      <div class="card-body">
+        <!-- API Configuration Status -->
+        {% if not api_status.configured %}
+        <div class="api-status not-configured">
+          <h5>
+            <i class="fas fa-exclamation-triangle me-2"></i>API Configuration
+            Required
+          </h5>
+          <p class="mb-2">
+            The following API keys need to be configured in your .env file:
+          </p>
+          <ul class="mb-0">
+            {% for key in api_status.missing_keys %}
+            <li><code>{{ key }}</code></li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% else %}
+        <div class="api-status configured">
+          <h5>
+            <i class="fas fa-check-circle me-2"></i>API Configuration Complete
+          </h5>
+          <p class="mb-0">
+            All required API keys are configured and ready to use.
+          </p>
+        </div>
+        {% endif %}
+
+        <!-- Blog Generation Form -->
+        <form method="post">
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label for="{{ form.title.id_for_label }}" class="form-label">
+              {{ form.title.label }}
+            </label>
+            {{ form.title }}
+            <div class="form-text">{{ form.title.help_text }}</div>
+            {% if form.title.errors %}
+            <div class="text-danger">
+              {% for error in form.title.errors %}
+              <small>{{ error }}</small>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label
+              for="{{ form.primary_keywords.id_for_label }}"
+              class="form-label"
+            >
+              {{ form.primary_keywords.label }}
+            </label>
+            {{ form.primary_keywords }}
+            <div class="form-text">{{ form.primary_keywords.help_text }}</div>
+            {% if form.primary_keywords.errors %}
+            <div class="text-danger">
+              {% for error in form.primary_keywords.errors %}
+              <small>{{ error }}</small>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label
+              for="{{ form.num_competitors.id_for_label }}"
+              class="form-label"
+            >
+              {{ form.num_competitors.label }}
+            </label>
+            {{ form.num_competitors }}
+            <div class="form-text">{{ form.num_competitors.help_text }}</div>
+            {% if form.num_competitors.errors %}
+            <div class="text-danger">
+              {% for error in form.num_competitors.errors %}
+              <small>{{ error }}</small>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+
+          <!-- Optional Fields -->
+          <div class="card mt-4 mb-3">
+            <div class="card-header">
+              <h6 class="card-title mb-0">
+                <i class="fas fa-cog me-2"></i>Optional Settings
+              </h6>
+            </div>
+            <div class="card-body">
+              <div class="mb-3">
+                <label
+                  for="{{ form.secondary_keywords.id_for_label }}"
+                  class="form-label"
+                >
+                  {{ form.secondary_keywords.label }}
+                </label>
+                {{ form.secondary_keywords }}
+                <div class="form-text">
+                  {{ form.secondary_keywords.help_text }}
+                </div>
+                {% if form.secondary_keywords.errors %}
+                <div class="text-danger">
+                  {% for error in form.secondary_keywords.errors %}
+                  <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+                {% endif %}
+              </div>
+
+              <div class="mb-3">
+                <label
+                  for="{{ form.blog_outline.id_for_label }}"
+                  class="form-label"
+                >
+                  {{ form.blog_outline.label }}
+                </label>
+                {{ form.blog_outline }}
+                <div class="form-text">{{ form.blog_outline.help_text }}</div>
+                {% if form.blog_outline.errors %}
+                <div class="text-danger">
+                  {% for error in form.blog_outline.errors %}
+                  <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+                {% endif %}
+              </div>
+
+              <div class="mb-0">
+                <label
+                  for="{{ form.target_length.id_for_label }}"
+                  class="form-label"
+                >
+                  {{ form.target_length.label }}
+                </label>
+                {{ form.target_length }}
+                <div class="form-text">{{ form.target_length.help_text }}</div>
+                {% if form.target_length.errors %}
+                <div class="text-danger">
+                  {% for error in form.target_length.errors %}
+                  <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          <div class="d-grid">
+            <button
+              type="submit"
+              class="btn btn-primary btn-lg"
+              {%
+              if
+              not
+              api_status.configured
+              %}disabled{%
+              endif
+              %}
+            >
+              <i class="fas fa-magic me-2"></i>Generate Blog Post
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-history me-2"></i>Recent Generations
+        </h5>
+      </div>
+      <div class="card-body">
+        {% if recent_blogs %} {% for blog in recent_blogs %}
+        <div class="blog-card">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <h6 class="mb-1">
+              <a
+                href="{% url 'blog_automation:blog_detail' blog.id %}"
+                class="text-decoration-none"
+              >
+                {{ blog.title|truncatechars:50 }}
+              </a>
+            </h6>
+            <span class="badge status-badge status-{{ blog.status }}">
+              {{ blog.get_status_display }}
+            </span>
+          </div>
+          <p class="text-muted small mb-2">
+            <i class="fas fa-clock me-1"></i>
+            {{ blog.created_at|timesince }} ago
+          </p>
+          {% if blog.word_count %}
+          <p class="text-muted small mb-0">
+            <i class="fas fa-file-alt me-1"></i>
+            {{ blog.word_count }}
+          </p>
+          {% endif %}
+        </div>
+        {% endfor %}
+
+        <div class="text-center mt-3">
+          <a
+            href="{% url 'blog_automation:blog_list' %}"
+            class="btn btn-outline-primary btn-sm"
+          >
+            View All Blogs
+          </a>
+        </div>
+        {% else %}
+        <p class="text-muted text-center mb-0">No blog generations yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Info Card -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-info-circle me-2"></i>How It Works
+        </h5>
+      </div>
+      <div class="card-body">
+        <ol class="mb-0">
+          <li class="mb-2">Enter your blog title and target keywords</li>
+          <li class="mb-2">Our AI analyzes top competitors</li>
+          <li class="mb-2">Generates comprehensive, SEO-optimized content</li>
+          <li class="mb-0">Download as a Word document</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

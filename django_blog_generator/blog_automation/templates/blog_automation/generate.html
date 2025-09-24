@@ -1,0 +1,154 @@
+{% extends 'blog_automation/base.html' %} {% block title %}Generate Blog - {{
+blog_gen.title }}{% endblock %} {% block content %}
+<div class="row">
+  <div class="col-lg-8 mx-auto">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title mb-0">
+          <i class="fas fa-cogs me-2"></i>Generate Blog Post
+        </h3>
+      </div>
+      <div class="card-body">
+        <div class="mb-4">
+          <h5>{{ blog_gen.title }}</h5>
+          <p class="text-muted mb-2">
+            <strong>Keywords:</strong> {{ blog_gen.primary_keywords }}
+          </p>
+          <p class="text-muted mb-0">
+            <strong>Competitors to analyze:</strong> {{ blog_gen.num_competitors
+            }}
+          </p>
+        </div>
+
+        {% if blog_gen.status == 'pending' %}
+        <div class="text-center">
+          <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            Ready to generate your blog post. This process may take 2-5 minutes.
+          </div>
+
+          <form method="post">
+            {% csrf_token %}
+            <button
+              type="submit"
+              class="btn btn-primary btn-lg"
+              id="generateBtn"
+            >
+              <i class="fas fa-magic me-2"></i>Start Generation
+            </button>
+          </form>
+        </div>
+        {% elif blog_gen.status == 'processing' %}
+        <div class="text-center">
+          <div class="alert alert-warning">
+            <div class="progress-spinner me-2"></div>
+            Generating your blog post... Please wait.
+          </div>
+
+          <div class="progress mb-3">
+            <div
+              class="progress-bar progress-bar-striped progress-bar-animated"
+              role="progressbar"
+              style="width: 100%"
+            ></div>
+          </div>
+
+          <p class="text-muted">
+            This process includes competitor analysis, content generation, and
+            formatting. Please don't close this page.
+          </p>
+
+          <button class="btn btn-outline-primary" onclick="checkStatus()">
+            <i class="fas fa-sync me-2"></i>Check Status
+          </button>
+        </div>
+        {% elif blog_gen.status == 'completed' %}
+        <div class="text-center">
+          <div class="alert alert-success">
+            <i class="fas fa-check-circle me-2"></i>
+            Blog post generated successfully!
+          </div>
+
+          <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+            <a
+              href="{% url 'blog_automation:blog_detail' blog_gen.id %}"
+              class="btn btn-primary"
+            >
+              <i class="fas fa-eye me-2"></i>View Blog
+            </a>
+            <a
+              href="{% url 'blog_automation:download_blog' blog_gen.id %}"
+              class="btn btn-success"
+            >
+              <i class="fas fa-download me-2"></i>Download DOC
+            </a>
+          </div>
+        </div>
+        {% elif blog_gen.status == 'failed' %}
+        <div class="text-center">
+          <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            Blog generation failed.
+          </div>
+
+          {% if blog_gen.error_message %}
+          <div class="alert alert-warning">
+            <strong>Error details:</strong><br />
+            {{ blog_gen.error_message }}
+          </div>
+          {% endif %}
+
+          <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+            <form method="post" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-warning">
+                <i class="fas fa-redo me-2"></i>Try Again
+              </button>
+            </form>
+            <a
+              href="{% url 'blog_automation:home' %}"
+              class="btn btn-outline-primary"
+            >
+              <i class="fas fa-arrow-left me-2"></i>Back to Home
+            </a>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Progress Information -->
+        <div class="mt-4">
+          <small class="text-muted">
+            <strong>Status:</strong>
+            <span class="badge status-badge status-{{ blog_gen.status }}">
+              {{ blog_gen.get_status_display }}
+            </span>
+            <br />
+            <strong>Last updated:</strong> {{ blog_gen.updated_at|timesince }}
+            ago
+          </small>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_js %}
+<script>
+  function checkStatus() {
+      fetch(`{% url 'blog_automation:check_status' blog_gen.id %}`)
+          .then(response => response.json())
+          .then(data => {
+              if (data.status === 'completed' || data.status === 'failed') {
+                  location.reload();
+              }
+          })
+          .catch(error => {
+              console.error('Error checking status:', error);
+          });
+  }
+
+  // Auto-refresh for processing status
+  {% if blog_gen.status == 'processing' %}
+      setInterval(checkStatus, 10000); // Check every 10 seconds
+  {% endif %}
+</script>
+{% endblock %}

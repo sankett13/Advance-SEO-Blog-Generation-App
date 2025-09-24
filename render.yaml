@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: seo-blog-generator
+    env: python
+    plan: free
+    region: oregon
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "cd django_blog_generator && python manage.py migrate && python manage.py collectstatic --noinput && gunicorn blog_generator.wsgi:application --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: DJANGO_SETTINGS_MODULE
+        value: blog_generator.settings_production
+      - key: DEBUG
+        value: "False"
+    # Auto-deploy when you push to main branch
+    autoDeploy: true

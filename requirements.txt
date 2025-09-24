@@ -1,0 +1,29 @@
+# Core Web Framework
+Django>=5.2.0
+
+# Web Scraping and HTTP
+beautifulsoup4>=4.13.0
+requests>=2.32.0
+httpx>=0.28.0
+
+# AI and Content Generation
+langchain>=0.3.27
+langchain-google-genai>=2.1.0
+google-generativeai>=0.8.0
+
+# SEO and Search APIs
+serpapi>=0.1.5
+dataforseo-client>=2.0.0
+
+# Document Generation
+python-docx>=1.2.0
+
+# Environment Configuration
+python-dotenv>=1.1.0
+
+# Data Processing (optional, for analytics)
+pandas>=2.3.0
+
+# Production Server and Static Files
+gunicorn>=21.2.0
+whitenoise>=6.6.0
