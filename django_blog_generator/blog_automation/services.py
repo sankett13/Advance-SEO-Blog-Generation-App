@@ -471,26 +471,25 @@ class SEOBlogGenerator:
                     "word_count": len(response.content.split())
                 }
             
-            # Create minimal result structure
-            blog_post = {
+            # Create the structure expected by format_blog_post_for_publication
+            blog_post_data = {
                 "blog_post": {
                     "title": blog_data.get("title", f"Guide to {target_keyword}"),
                     "content": blog_data.get("content", ""),
                     "word_count": blog_data.get("word_count", 0)
+                },
+                "seo_meta": {
+                    "meta_title": blog_data.get("title", f"{target_keyword} - Complete Guide"),
+                    "meta_description": blog_data.get("meta_description", f"Complete guide to {target_keyword}")
                 }
-            }
-            
-            seo_meta = {
-                "meta_title": blog_data.get("title", f"{target_keyword} - Complete Guide"),
-                "meta_description": blog_data.get("meta_description", f"Complete guide to {target_keyword}")
             }
             
             # Format the post using the original function
             from seo_content_automation import format_blog_post_for_publication
-            formatted_post = format_blog_post_for_publication(blog_post, seo_meta)
+            formatted_post = format_blog_post_for_publication(blog_post_data)
             
             return {
-                'blog_post': blog_post,
+                'blog_post': blog_post_data,
                 'formatted_post': formatted_post,
                 'content_strategy': {
                     'success': True,
