@@ -90,23 +90,29 @@ class SEOBlogGenerator:
                     'content': None
                 }
             
-            # Run the complete blog workflow from the original script with timeout protection
+            # Use memory-optimized approach for Render deployment
+            import gc
             import signal
+            
+            # Force garbage collection before starting
+            gc.collect()
             
             def timeout_handler(signum, frame):
                 raise TimeoutError("Blog generation timed out")
             
-            # Set a 4-minute timeout (less than gunicorn's 5-minute timeout)
+            # Set a 8-minute timeout (less than gunicorn's 10-minute timeout)
             signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(240)
+            signal.alarm(480)
             
             try:
-                complete_workflow = create_complete_blog_workflow(
+                # Use a simplified workflow for memory efficiency
+                complete_workflow = self._memory_efficient_blog_workflow(
                     target_keyword=target_keyword,
-                    num_competitors=num_competitors
+                    num_competitors=min(num_competitors, 2)  # Limit to 2 competitors max
                 )
             finally:
                 signal.alarm(0)  # Cancel the alarm
+                gc.collect()  # Clean up memory
             
             # Note: For now, the original script doesn't support custom outlines/length/secondary keywords
             # These could be implemented by modifying the content generation prompts
@@ -217,6 +223,172 @@ class SEOBlogGenerator:
             logger.error(f"Error saving document: {str(e)}")
             return None
     
+    def _memory_efficient_blog_workflow(self, target_keyword, num_competitors=2):
+        """
+        Memory-efficient version of the blog workflow for Render deployment
+        """
+        import gc
+        from memory_optimized_seo import memory_efficient_content_gaps_analysis
+        
+        try:
+            # Step 1: Get competitors (limited to reduce memory usage)
+            print(f"\n1. 🔍 Getting top {num_competitors} competitors...")
+            
+            # Use the original functions but with reduced scope
+            from seo_content_automation import (
+                get_serp_results, 
+                scrape_blog_content,
+                generate_comprehensive_blog_post,
+                format_blog_post_for_publication
+            )
+            
+            # Get SERP results
+            serp_results = get_serp_results(target_keyword, num_results=num_competitors)
+            competitors = serp_results.get('organic_results', [])[:num_competitors]
+            
+            print(f"✅ Found {len(competitors)} competitors")
+            
+            # Step 2: Scrape competitor content (with memory optimization)
+            print(f"\n2. 📊 Scraping competitor blog content...")
+            scraped_data = []
+            
+            for i, competitor in enumerate(competitors, 1):
+                print(f"   Scraping competitor {i}: {competitor.get('link', 'N/A')}")
+                try:
+                    blog_data = scrape_blog_content(competitor.get('link', ''))
+                    if blog_data:
+                        scraped_data.append(blog_data)
+                        print(f"   ✅ Successfully scraped competitor {i}")
+                    else:
+                        print(f"   ⚠️ Failed to scrape competitor {i}")
+                except Exception as e:
+                    print(f"   ⚠️ Error scraping competitor {i}: {str(e)}")
+                
+                # Force garbage collection after each scrape
+                gc.collect()
+            
+            # Step 3: Memory-efficient content analysis
+            print(f"\n3. 🤖 Running memory-efficient AI analysis...")
+            content_gaps = memory_efficient_content_gaps_analysis(
+                scraped_data, [], target_keyword
+            )
+            
+            # Clean up scraped data to free memory
+            del scraped_data
+            gc.collect()
+            
+            # Step 4: Generate blog post (with reduced complexity)
+            print(f"\n4. ✍️ Generating blog post...")
+            
+            # Simplified blog generation prompt
+            blog_result = self._generate_simple_blog_post(target_keyword, content_gaps)
+            
+            # Step 5: Format the post
+            print(f"\n5. 📝 Formatting blog post...")
+            formatted_post = format_blog_post_for_publication(
+                blog_result.get('blog_post', {}), 
+                blog_result.get('seo_meta', {})
+            )
+            
+            return {
+                'blog_post': blog_result,
+                'formatted_post': formatted_post,
+                'content_strategy': content_gaps,
+                'workflow_summary': {
+                    'competitors_analyzed': len(competitors),
+                    'memory_optimized': True
+                }
+            }
+            
+        except Exception as e:
+            print(f"Error in memory-efficient workflow: {str(e)}")
+            raise e
+    
+    def _generate_simple_blog_post(self, target_keyword, content_gaps):
+        """Generate a simple blog post with reduced memory usage"""
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        from langchain_core.messages import HumanMessage, SystemMessage
+        import json
+        import gc
+        
+        # Use Flash model for lower memory usage
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
+            google_api_key=os.getenv("GOOGLE_GEMINI_API_KEY"),
+            temperature=0.3,
+            max_tokens=3000  # Reduced token limit
+        )
+        
+        system_prompt = """You are an expert blog writer. Create a comprehensive, SEO-optimized blog post.
+        
+        Return JSON format:
+        {
+            "blog_post": {
+                "title": "SEO optimized title",
+                "content": "Full blog post content in markdown",
+                "word_count": number
+            },
+            "seo_meta": {
+                "meta_title": "title for meta tag",
+                "meta_description": "description for meta tag"
+            }
+        }"""
+        
+        # Get content gaps info
+        gaps_info = ""
+        if content_gaps.get('success') and content_gaps.get('analysis'):
+            gaps_info = content_gaps['analysis'][:500]  # Limit size
+        elif content_gaps.get('fallback_analysis'):
+            fallback = content_gaps['fallback_analysis']
+            gaps_info = f"Key topics to cover: {', '.join(fallback['missing_topics'][:3])}"
+        
+        human_prompt = f"""
+        Write a comprehensive blog post about: "{target_keyword}"
+        
+        Content guidance: {gaps_info}
+        
+        Requirements:
+        - 1500-2000 words
+        - Include H2 and H3 headings
+        - SEO optimized
+        - Practical and informative
+        - Include introduction and conclusion
+        """
+        
+        try:
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=human_prompt)
+            ]
+            
+            response = llm.invoke(messages)
+            
+            # Clean up
+            del messages
+            gc.collect()
+            
+            # Parse the response
+            try:
+                result = json.loads(response.content)
+                return result
+            except json.JSONDecodeError:
+                # Fallback if JSON parsing fails
+                return {
+                    "blog_post": {
+                        "title": f"Complete Guide to {target_keyword}",
+                        "content": response.content,
+                        "word_count": len(response.content.split())
+                    },
+                    "seo_meta": {
+                        "meta_title": f"{target_keyword} - Complete Guide",
+                        "meta_description": f"Comprehensive guide to {target_keyword}. Learn everything you need to know."
+                    }
+                }
+                
+        except Exception as e:
+            print(f"Error generating blog post: {str(e)}")
+            raise e
+
     def get_generated_files_dir(self):
         """Get the directory where generated files are stored"""
         return os.path.join(self.media_root, 'generated_blogs')
