@@ -423,16 +423,8 @@ class SEOBlogGenerator:
             if target_length:
                 user_context += f"\nTarget Length: {target_length}"
             
-            # Ultra-simple system prompt
-            system_prompt = """You are an expert blog writer. Create an SEO-optimized blog post.
-            
-            Return ONLY valid JSON:
-            {
-                "title": "SEO title",
-                "content": "Full markdown blog post",
-                "meta_description": "Meta description",
-                "word_count": number
-            }"""
+            # Ultra-simple system prompt - avoid JSON to reduce parsing issues
+            system_prompt = """You are an expert blog writer. Create a comprehensive, SEO-optimized blog post in markdown format. Start with a clear title and write informative content."""
             
             # Simple human prompt - no complex analysis
             human_prompt = f"""Write a comprehensive blog post about: "{target_keyword}"
@@ -440,12 +432,15 @@ class SEOBlogGenerator:
             {user_context}
             
             Requirements:
+            - Start with a clear title (use # for main title)
             - 1200-1800 words
-            - Use H2 and H3 headings
+            - Use ## for H2 headings and ### for H3 headings  
             - SEO optimized for the keyword
             - Include introduction and conclusion
             - Practical and informative
-            - Write in markdown format"""
+            - Write everything in markdown format
+            
+            Please write the complete blog post now."""
             
             # Generate the blog post
             messages = [
@@ -453,23 +448,39 @@ class SEOBlogGenerator:
                 HumanMessage(content=human_prompt)
             ]
             
-            response = llm.invoke(messages)
-            
-            # Immediate cleanup
-            del messages, system_prompt, human_prompt
-            gc.collect()
-            
-            # Parse response
             try:
-                blog_data = json.loads(response.content)
-            except json.JSONDecodeError:
-                # Fallback parsing
-                blog_data = {
-                    "title": f"Complete Guide to {target_keyword}",
-                    "content": response.content,
-                    "meta_description": f"Learn everything about {target_keyword} in this comprehensive guide.",
-                    "word_count": len(response.content.split())
-                }
+                response = llm.invoke(messages)
+                
+                # Immediate cleanup
+                del messages, system_prompt, human_prompt
+                gc.collect()
+                
+            except Exception as api_error:
+                print(f"⚠️ Gemini API error: {str(api_error)}")
+                # Cleanup and fall back to emergency generation
+                del messages, system_prompt, human_prompt
+                gc.collect()
+                raise api_error
+            
+            # Parse response - expect markdown content directly
+            response_content = response.content if hasattr(response, 'content') else str(response)
+            
+            # Extract title from markdown if it exists
+            title = f"Complete Guide to {target_keyword}"
+            content = response_content
+            
+            # Try to extract title from first line if it starts with #
+            lines = response_content.split('\n')
+            if lines and lines[0].startswith('# '):
+                title = lines[0][2:].strip()  # Remove '# ' prefix
+                content = '\n'.join(lines[1:]).strip()  # Rest is content
+            
+            blog_data = {
+                "title": title,
+                "content": content,
+                "meta_description": f"Learn everything about {target_keyword} in this comprehensive guide.",
+                "word_count": len(response_content.split())
+            }
             
             # Create the structure expected by format_blog_post_for_publication
             blog_post_data = {
