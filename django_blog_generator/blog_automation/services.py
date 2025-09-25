@@ -61,6 +61,21 @@ class SEOBlogGenerator:
             dict: Result containing blog content and metadata
         """
         try:
+            # Check for required environment variables
+            if not os.getenv('GEMINI_API_KEY'):
+                return {
+                    'success': False,
+                    'error': 'GEMINI_API_KEY environment variable is not set. Please configure it in Render dashboard.',
+                    'content': None
+                }
+                
+            if not os.getenv('SERP_API_KEY'):
+                return {
+                    'success': False,
+                    'error': 'SERP_API_KEY environment variable is not set. Please configure it in Render dashboard.',
+                    'content': None
+                }
+            
             # Prepare the target keyword (use title as primary target)
             target_keyword = title
             
@@ -75,11 +90,23 @@ class SEOBlogGenerator:
                     'content': None
                 }
             
-            # Run the complete blog workflow from the original script
-            complete_workflow = create_complete_blog_workflow(
-                target_keyword=target_keyword,
-                num_competitors=num_competitors
-            )
+            # Run the complete blog workflow from the original script with timeout protection
+            import signal
+            
+            def timeout_handler(signum, frame):
+                raise TimeoutError("Blog generation timed out")
+            
+            # Set a 4-minute timeout (less than gunicorn's 5-minute timeout)
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(240)
+            
+            try:
+                complete_workflow = create_complete_blog_workflow(
+                    target_keyword=target_keyword,
+                    num_competitors=num_competitors
+                )
+            finally:
+                signal.alarm(0)  # Cancel the alarm
             
             # Note: For now, the original script doesn't support custom outlines/length/secondary keywords
             # These could be implemented by modifying the content generation prompts
@@ -113,11 +140,31 @@ class SEOBlogGenerator:
                 }
             }
             
-        except Exception as e:
-            logger.error(f"Error in blog generation: {str(e)}")
+        except TimeoutError:
+            logger.error("Blog generation timed out")
             return {
                 'success': False,
-                'error': f'Blog generation failed: {str(e)}',
+                'error': 'Blog generation timed out. Please try again with a simpler topic or fewer competitors.',
+                'content': None
+            }
+        except Exception as e:
+            logger.error(f"Error in blog generation: {str(e)}")
+            # Check for specific API errors
+            error_message = str(e)
+            if "PERMISSION_DENIED" in error_message or "API_KEY_INVALID" in error_message:
+                error_message = "Invalid API key. Please check your Gemini API key configuration."
+            elif "RESOURCE_EXHAUSTED" in error_message:
+                error_message = "API quota exceeded. Please try again later."
+            elif "UNAVAILABLE" in error_message:
+                error_message = "API service temporarily unavailable. Please try again later."
+            elif "SystemExit" in error_message:
+                error_message = "Process was terminated due to memory constraints. Try with fewer competitors or simpler topic."
+            else:
+                error_message = f"Blog generation failed: {error_message}"
+                
+            return {
+                'success': False,
+                'error': error_message,
                 'content': None
             }
     

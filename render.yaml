@@ -5,7 +5,7 @@ services:
     plan: free
     region: oregon
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "cd django_blog_generator && python manage.py migrate && python manage.py collectstatic --noinput && gunicorn blog_generator.wsgi:application --bind 0.0.0.0:$PORT"
+    startCommand: "cd django_blog_generator && python manage.py migrate && python manage.py collectstatic --noinput && gunicorn blog_generator.wsgi:application --bind 0.0.0.0:$PORT --workers 1 --timeout 300 --max-requests 100 --max-requests-jitter 10"
     envVars:
       - key: PYTHON_VERSION
         value: "3.10"
@@ -13,5 +13,9 @@ services:
         value: blog_generator.settings_production
       - key: DEBUG
         value: "False"
+      - key: GEMINI_API_KEY
+        sync: false # This will need to be set manually in Render dashboard
+      - key: SERP_API_KEY
+        sync: false # This will need to be set manually in Render dashboard
     # Auto-deploy when you push to main branch
     autoDeploy: true
