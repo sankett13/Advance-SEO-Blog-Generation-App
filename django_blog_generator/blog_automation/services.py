@@ -236,15 +236,14 @@ class SEOBlogGenerator:
             
             # Use the original functions but with reduced scope
             from seo_content_automation import (
-                get_serp_results, 
-                scrape_blog_content,
-                generate_comprehensive_blog_post,
+                get_top_5_links_and_paa,
+                scrape_blog,
                 format_blog_post_for_publication
             )
             
-            # Get SERP results
-            serp_results = get_serp_results(target_keyword, num_results=num_competitors)
-            competitors = serp_results.get('organic_results', [])[:num_competitors]
+            # Get SERP results using the correct function
+            competitor_links, paa_questions = get_top_5_links_and_paa(target_keyword, os.getenv("SERP_API_KEY"), num_results=num_competitors)
+            competitors = [{'url': link} for link in competitor_links[:num_competitors]]
             
             print(f"✅ Found {len(competitors)} competitors")
             
@@ -253,9 +252,10 @@ class SEOBlogGenerator:
             scraped_data = []
             
             for i, competitor in enumerate(competitors, 1):
-                print(f"   Scraping competitor {i}: {competitor.get('link', 'N/A')}")
+                competitor_url = competitor.get('url', competitor.get('link', ''))
+                print(f"   Scraping competitor {i}: {competitor_url}")
                 try:
-                    blog_data = scrape_blog_content(competitor.get('link', ''))
+                    blog_data = scrape_blog(competitor_url)
                     if blog_data:
                         scraped_data.append(blog_data)
                         print(f"   ✅ Successfully scraped competitor {i}")
@@ -270,7 +270,7 @@ class SEOBlogGenerator:
             # Step 3: Memory-efficient content analysis
             print(f"\n3. 🤖 Running memory-efficient AI analysis...")
             content_gaps = memory_efficient_content_gaps_analysis(
-                scraped_data, [], target_keyword
+                scraped_data, paa_questions, target_keyword
             )
             
             # Clean up scraped data to free memory
