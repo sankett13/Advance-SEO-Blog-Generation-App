@@ -13,7 +13,7 @@ services:
         value: blog_generator.settings_production
       - key: DEBUG
         value: "False"
-      - key: GEMINI_API_KEY
+      - key: GOOGLE_GEMINI_API_KEY
         sync: false # This will need to be set manually in Render dashboard
       - key: SERP_API_KEY
         sync: false # This will need to be set manually in Render dashboard

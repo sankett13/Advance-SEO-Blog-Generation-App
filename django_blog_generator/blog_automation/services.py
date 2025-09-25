@@ -62,10 +62,10 @@ class SEOBlogGenerator:
         """
         try:
             # Check for required environment variables
-            if not os.getenv('GEMINI_API_KEY'):
+            if not os.getenv('GOOGLE_GEMINI_API_KEY'):
                 return {
                     'success': False,
-                    'error': 'GEMINI_API_KEY environment variable is not set. Please configure it in Render dashboard.',
+                    'error': 'GOOGLE_GEMINI_API_KEY environment variable is not set. Please configure it in Render dashboard.',
                     'content': None
                 }
                 
