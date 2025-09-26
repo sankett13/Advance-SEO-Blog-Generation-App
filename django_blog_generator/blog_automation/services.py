@@ -65,14 +65,14 @@ class SEOBlogGenerator:
             if not os.getenv('GOOGLE_GEMINI_API_KEY'):
                 return {
                     'success': False,
-                    'error': 'GOOGLE_GEMINI_API_KEY environment variable is not set. Please configure it in Render dashboard.',
+                    'error': 'GOOGLE_GEMINI_API_KEY environment variable is not set. Please set it in your environment or .env file.',
                     'content': None
                 }
                 
             if not os.getenv('SERP_API_KEY'):
                 return {
                     'success': False,
-                    'error': 'SERP_API_KEY environment variable is not set. Please configure it in Render dashboard.',
+                    'error': 'SERP_API_KEY environment variable is not set. Please set it in your environment or .env file.',
                     'content': None
                 }
             
@@ -80,7 +80,11 @@ class SEOBlogGenerator:
             target_keyword = title
             
             logger.info(f"Starting blog generation for: {target_keyword}")
+            logger.info(f"Number of competitors to analyze: {num_competitors}")
             logger.info(f"Optional parameters - Secondary keywords: {secondary_keywords}, Outline: {blog_outline}, Length: {target_length}")
+            
+            # Note: The original create_complete_blog_workflow doesn't support the optional parameters yet
+            # This is a future enhancement opportunity to modify the prompts with custom outlines/length/secondary keywords
             
             # Check if the original functions are available
             if not create_complete_blog_workflow:
@@ -92,29 +96,20 @@ class SEOBlogGenerator:
             
             # Use ultra-minimal approach for Render's memory constraints
             import gc
-            import signal
             
             # Force garbage collection before starting
             gc.collect()
             
-            def timeout_handler(signum, frame):
-                raise TimeoutError("Blog generation timed out")
-            
-            # Set a 8-minute timeout (less than gunicorn's 10-minute timeout)
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(480)
-            
             try:
-                # Check available memory and use ultra-minimal approach
-                complete_workflow = self._ultra_minimal_blog_generation(
+                # Use full competitor analysis workflow for local development
+                logger.info("Using full competitor analysis workflow")
+                complete_workflow = create_complete_blog_workflow(
                     target_keyword=target_keyword,
-                    secondary_keywords=secondary_keywords,
-                    blog_outline=blog_outline,
-                    target_length=target_length
+                    num_competitors=num_competitors
                 )
             finally:
-                signal.alarm(0)  # Cancel the alarm
-                gc.collect()  # Clean up memory
+                # Clean up memory
+                gc.collect()
             
             # Note: For now, the original script doesn't support custom outlines/length/secondary keywords
             # These could be implemented by modifying the content generation prompts
@@ -148,13 +143,6 @@ class SEOBlogGenerator:
                 }
             }
             
-        except TimeoutError:
-            logger.error("Blog generation timed out")
-            return {
-                'success': False,
-                'error': 'Blog generation timed out. Please try again with a simpler topic or fewer competitors.',
-                'content': None
-            }
         except Exception as e:
             logger.error(f"Error in blog generation: {str(e)}")
             # Check for specific API errors
@@ -165,8 +153,10 @@ class SEOBlogGenerator:
                 error_message = "API quota exceeded. Please try again later."
             elif "UNAVAILABLE" in error_message:
                 error_message = "API service temporarily unavailable. Please try again later."
-            elif "SystemExit" in error_message:
-                error_message = "Process was terminated due to memory constraints. Try with fewer competitors or simpler topic."
+            elif "ImportError" in error_message:
+                error_message = "Missing dependencies. Please ensure all required packages are installed."
+            elif "ConnectTimeout" in error_message or "ReadTimeout" in error_message:
+                error_message = "Network timeout. Please check your internet connection and try again."
             else:
                 error_message = f"Blog generation failed: {error_message}"
                 
@@ -463,35 +453,48 @@ class SEOBlogGenerator:
                 raise api_error
             
             # Parse response - expect markdown content directly
-            response_content = response.content if hasattr(response, 'content') else str(response)
+            try:
+                # Safe extraction of content
+                if hasattr(response, 'content'):
+                    response_content = response.content
+                elif hasattr(response, 'text'):
+                    response_content = response.text
+                else:
+                    response_content = str(response)
+                
+                # Ensure we have a string
+                if not isinstance(response_content, str):
+                    response_content = str(response_content)
+                
+            except Exception as parse_error:
+                print(f"⚠️ Error parsing response: {str(parse_error)}")
+                response_content = f"Error parsing response for {target_keyword}"
             
             # Extract title from markdown if it exists
             title = f"Complete Guide to {target_keyword}"
             content = response_content
             
             # Try to extract title from first line if it starts with #
-            lines = response_content.split('\n')
-            if lines and lines[0].startswith('# '):
-                title = lines[0][2:].strip()  # Remove '# ' prefix
-                content = '\n'.join(lines[1:]).strip()  # Rest is content
-            
-            blog_data = {
-                "title": title,
-                "content": content,
-                "meta_description": f"Learn everything about {target_keyword} in this comprehensive guide.",
-                "word_count": len(response_content.split())
-            }
+            try:
+                lines = response_content.split('\n')
+                if lines and len(lines) > 0 and lines[0].startswith('# '):
+                    title = lines[0][2:].strip()  # Remove '# ' prefix
+                    content = '\n'.join(lines[1:]).strip()  # Rest is content
+            except Exception:
+                # If title extraction fails, use the default
+                pass
             
             # Create the structure expected by format_blog_post_for_publication
+            # Don't use .get() since we're creating the dict ourselves
             blog_post_data = {
                 "blog_post": {
-                    "title": blog_data.get("title", f"Guide to {target_keyword}"),
-                    "content": blog_data.get("content", ""),
-                    "word_count": blog_data.get("word_count", 0)
+                    "title": title,
+                    "content": content,
+                    "word_count": len(response_content.split()) if response_content else 0
                 },
                 "seo_meta": {
-                    "meta_title": blog_data.get("title", f"{target_keyword} - Complete Guide"),
-                    "meta_description": blog_data.get("meta_description", f"Complete guide to {target_keyword}")
+                    "meta_title": f"{title} - Complete Guide",
+                    "meta_description": f"Learn everything about {target_keyword} in this comprehensive guide."
                 }
             }
             
