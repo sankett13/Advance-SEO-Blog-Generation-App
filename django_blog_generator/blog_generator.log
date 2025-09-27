@@ -41,3 +41,11 @@ Number of competitors to analyze: 3
 Optional parameters - Secondary keywords: , Outline: None, Length: None
 Using full competitor analysis workflow
 Document saved to: /Users/sanketpatel/Desktop/NetopDigital/Content_Generation_Automation/django_blog_generator/media/generated_blogs/blog_post_20250927_070447_AI_Powered_SEO_Smarter_Strateg.docx
+Starting blog generation for: AI-Powered SEO: Smarter Strategies for Higher Ranking
+Number of competitors to analyze: 3
+Optional parameters - Secondary keywords: , Outline: None, Length: 1000 words
+Using full competitor analysis workflow
+Enhanced workflow with target_length: 1000 words
+Error generating custom outline: Expecting value: line 1 column 1 (char 0)
+Error generating enhanced blog post: Expecting value: line 1 column 1 (char 0)
+Document saved to: /Users/sanketpatel/Desktop/NetopDigital/Content_Generation_Automation/django_blog_generator/media/generated_blogs/blog_post_20250927_093842_AI_Powered_SEO_Smarter_Strateg.docx

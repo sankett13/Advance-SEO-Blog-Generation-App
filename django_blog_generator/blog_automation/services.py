@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -103,9 +104,14 @@ class SEOBlogGenerator:
             try:
                 # Use full competitor analysis workflow for local development
                 logger.info("Using full competitor analysis workflow")
-                complete_workflow = create_complete_blog_workflow(
+                
+                # Create a modified version that supports target length and other parameters
+                complete_workflow = self._enhanced_blog_workflow(
                     target_keyword=target_keyword,
-                    num_competitors=num_competitors
+                    num_competitors=num_competitors,
+                    secondary_keywords=secondary_keywords,
+                    blog_outline=blog_outline,
+                    target_length=target_length
                 )
             finally:
                 # Clean up memory
@@ -168,7 +174,7 @@ class SEOBlogGenerator:
     
     def save_as_document(self, formatted_post, filename):
         """
-        Save the formatted blog post as a .docx file
+        Save the formatted blog post as a .docx file with proper formatting (no markdown)
         
         Args:
             formatted_post (str): Formatted blog content
@@ -184,36 +190,243 @@ class SEOBlogGenerator:
             # Ensure directory exists
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             
-            # Use the original save_as_docx function if available
-            if save_as_docx:
-                save_as_docx(formatted_post, file_path)
-                logger.info(f"Document saved to: {file_path}")
-                return file_path
-            else:
-                # Fallback: create a simple document
-                from docx import Document
-                
-                doc = Document()
-                doc.add_heading("Generated Blog Post", 0)
-                
-                # Add the content as paragraphs
-                for line in formatted_post.split('\n'):
-                    if line.strip():
-                        if line.startswith('#'):
-                            # Handle markdown headings
-                            level = len(line) - len(line.lstrip('#'))
-                            heading_text = line.strip('#').strip()
-                            doc.add_heading(heading_text, level)
-                        else:
-                            doc.add_paragraph(line)
-                
-                doc.save(file_path)
-                logger.info(f"Document saved to: {file_path}")
-                return file_path
+            # Use enhanced document creation with proper formatting
+            self._create_enhanced_docx(formatted_post, file_path)
+            logger.info(f"Document saved to: {file_path}")
+            return file_path
                 
         except Exception as e:
             logger.error(f"Error saving document: {str(e)}")
             return None
+    
+    def _create_enhanced_docx(self, content, file_path):
+        """
+        Create a DOCX file with proper formatting, converting markdown to Word format
+        """
+        from docx import Document
+        from docx.shared import Inches, Pt
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.oxml.shared import OxmlElement, qn
+        from docx.oxml.ns import nsdecls
+        from docx.oxml import parse_xml
+        import re
+        
+        doc = Document()
+        
+        # Set document margins
+        sections = doc.sections
+        for section in sections:
+            section.top_margin = Inches(1)
+            section.bottom_margin = Inches(1)
+            section.left_margin = Inches(1)
+            section.right_margin = Inches(1)
+        
+        lines = content.split('\n')
+        i = 0
+        
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            if not line:
+                i += 1
+                continue
+                
+            # Handle headings
+            if line.startswith('#'):
+                level = len(line) - len(line.lstrip('#'))
+                heading_text = line.strip('#').strip()
+                
+                # Add heading with appropriate level
+                if level == 1:
+                    heading = doc.add_heading(heading_text, 0)
+                elif level == 2:
+                    heading = doc.add_heading(heading_text, 1)
+                elif level == 3:
+                    heading = doc.add_heading(heading_text, 2)
+                else:
+                    heading = doc.add_heading(heading_text, 3)
+                    
+            # Handle tables
+            elif line.startswith('|') and '|' in line:
+                table_lines = []
+                # Collect all table lines
+                while i < len(lines) and lines[i].strip().startswith('|'):
+                    table_line = lines[i].strip()
+                    if not table_line.replace('|', '').replace('-', '').replace(' ', ''):
+                        # Skip separator line
+                        i += 1
+                        continue
+                    table_lines.append(table_line)
+                    i += 1
+                
+                if table_lines:
+                    self._add_table_to_doc(doc, table_lines)
+                continue
+                
+            # Handle lists
+            elif line.startswith(('-', '*', '+')):
+                # Handle unordered list
+                list_text = line[1:].strip()
+                list_text = self._clean_markdown_formatting(list_text)
+                p = doc.add_paragraph()
+                p.style = 'List Bullet'
+                p.add_run(list_text)
+                
+            elif re.match(r'^\d+\.', line):
+                # Handle ordered list
+                list_text = re.sub(r'^\d+\.\s*', '', line)
+                list_text = self._clean_markdown_formatting(list_text)
+                p = doc.add_paragraph()
+                p.style = 'List Number'
+                p.add_run(list_text)
+                
+            # Handle regular paragraphs
+            else:
+                if line:
+                    # Clean markdown and add paragraph
+                    clean_text = self._clean_markdown_formatting(line)
+                    p = doc.add_paragraph()
+                    self._add_formatted_text(p, clean_text)
+            
+            i += 1
+        
+        doc.save(file_path)
+    
+    def _add_table_to_doc(self, doc, table_lines):
+        """Add a professionally formatted table to the document"""
+        from docx.shared import Pt
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        
+        if not table_lines:
+            return
+            
+        # Parse table data
+        rows_data = []
+        for line in table_lines:
+            cells = [cell.strip() for cell in line.split('|')[1:-1]]  # Remove empty first/last
+            if cells:
+                rows_data.append(cells)
+        
+        if not rows_data:
+            return
+            
+        # Create table with proper styling
+        table = doc.add_table(rows=len(rows_data), cols=len(rows_data[0]))
+        
+        # Apply built-in professional table style
+        table.style = 'Medium Grid 1 Accent 1'
+        
+        # Fill table data with enhanced formatting
+        for row_idx, row_data in enumerate(rows_data):
+            row = table.rows[row_idx]
+            
+            for col_idx, cell_data in enumerate(row_data):
+                if col_idx < len(row.cells):
+                    cell = row.cells[col_idx]
+                    
+                    # Clean and add formatted text
+                    clean_text = self._clean_markdown_formatting(cell_data)
+                    
+                    # Clear existing content and add new
+                    cell.text = clean_text
+                    
+                    # Enhanced formatting for cells
+                    paragraph = cell.paragraphs[0]
+                    
+                    # Header row styling
+                    if row_idx == 0:
+                        for run in paragraph.runs:
+                            run.bold = True
+                            if hasattr(run.font, 'size'):
+                                run.font.size = Pt(11)
+                        # Center align headers
+                        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    else:
+                        for run in paragraph.runs:
+                            if hasattr(run.font, 'size'):
+                                run.font.size = Pt(10)
+                        # Left align content
+                        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        
+        # Set table properties for better appearance
+        try:
+            table.autofit = True
+        except:
+            pass  # Some versions don't support autofit
+        
+        # Add space after table
+        doc.add_paragraph()
+    
+    def _clean_markdown_formatting(self, text):
+        """Remove markdown formatting and return clean text"""
+        # Remove markdown bold/italic
+        text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)  # **bold**
+        text = re.sub(r'\*([^*]+)\*', r'\1', text)      # *italic*
+        text = re.sub(r'__([^_]+)__', r'\1', text)      # __bold__
+        text = re.sub(r'_([^_]+)_', r'\1', text)        # _italic_
+        
+        # Handle code blocks
+        text = re.sub(r'`([^`]+)`', r'\1', text)        # `code`
+        
+        # Remove markdown links but keep the text and URL
+        text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1 (\2)', text)
+        
+        return text
+    
+    def _add_formatted_text(self, paragraph, text):
+        """Add formatted text to paragraph with hyperlinks"""
+        import re
+        
+        # Find hyperlinks in format [text](url) 
+        link_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
+        
+        last_end = 0
+        for match in re.finditer(link_pattern, text):
+            # Add text before link
+            if match.start() > last_end:
+                paragraph.add_run(text[last_end:match.start()])
+            
+            # Add hyperlink
+            link_text = match.group(1)
+            link_url = match.group(2)
+            self._add_hyperlink(paragraph, link_url, link_text)
+            
+            last_end = match.end()
+        
+        # Add remaining text
+        if last_end < len(text):
+            paragraph.add_run(text[last_end:])
+    
+    def _add_hyperlink(self, paragraph, url, text):
+        """Add a hyperlink to a paragraph"""
+        from docx.oxml.shared import OxmlElement, qn
+        
+        # Create hyperlink element
+        hyperlink = OxmlElement('w:hyperlink')
+        hyperlink.set(qn('w:anchor'), url)
+        
+        # Create run for the link
+        run = OxmlElement('w:r')
+        rPr = OxmlElement('w:rPr')
+        
+        # Add blue color and underline for hyperlink appearance
+        color = OxmlElement('w:color')
+        color.set(qn('w:val'), '0000FF')
+        rPr.append(color)
+        
+        u = OxmlElement('w:u')
+        u.set(qn('w:val'), 'single')
+        rPr.append(u)
+        
+        run.append(rPr)
+        
+        # Add text
+        t = OxmlElement('w:t')
+        t.text = text
+        run.append(t)
+        
+        hyperlink.append(run)
+        paragraph._p.append(hyperlink)
     
     def _memory_efficient_blog_workflow(self, target_keyword, num_competitors=2):
         """
@@ -614,6 +827,379 @@ Remember to practice regularly and stay committed to continuous learning."""
                 'emergency_fallback': True
             }
         }
+
+    def _enhanced_blog_workflow(self, target_keyword, num_competitors=3, secondary_keywords=None, blog_outline=None, target_length=None):
+        """
+        Enhanced blog workflow that supports target length and other custom parameters
+        """
+        from seo_content_automation import (
+            create_complete_content_strategy,
+            generate_blog_outline,
+            generate_blog_post,
+            format_blog_post_for_publication
+        )
+        
+        logger.info(f"Enhanced workflow with target_length: {target_length}")
+        
+        # Step 1: Create content strategy (competitor analysis)
+        print(f"\n📊 STEP 1: CREATING CONTENT STRATEGY")
+        complete_strategy = create_complete_content_strategy(target_keyword, num_competitors)
+        
+        if "error" in complete_strategy:
+            return {"error": f"Content strategy creation failed: {complete_strategy['error']}"}
+        
+        # Step 2: Generate blog outline with custom parameters
+        print(f"\n📝 STEP 2: BLOG OUTLINE GENERATION")
+        
+        # Modify the outline generation to include custom parameters
+        outline_data = self._generate_custom_outline(complete_strategy, blog_outline, target_length, secondary_keywords)
+        
+        if "error" in outline_data:
+            return {"error": f"Outline generation failed: {outline_data['error']}"}
+        
+        # Step 3: Generate blog post with custom parameters
+        print(f"\n📝 STEP 3: GENERATING BLOG POST")
+        blog_post = self._generate_enhanced_blog_post(outline_data, complete_strategy, target_length)
+        
+        if "error" in blog_post:
+            return {"error": f"Blog post generation failed: {blog_post['error']}"}
+        
+        # Step 4: Format for publication
+        print(f"\n📋 STEP 4: FORMATTING FOR PUBLICATION")
+        formatted_post = format_blog_post_for_publication(blog_post)
+        
+        # Return complete workflow result
+        return {
+            "target_keyword": target_keyword,
+            "creation_date": datetime.now().isoformat(),
+            "content_strategy": complete_strategy,
+            "blog_post": blog_post,
+            "formatted_post": formatted_post,
+            "workflow_summary": {
+                "competitors_analyzed": complete_strategy.get("strategy_summary", {}).get("competitors_analyzed", 0),
+                "outline_generated": True,
+                "blog_post_created": True,
+                "estimated_word_count": blog_post.get("blog_post", {}).get("word_count", "N/A"),
+                "custom_parameters_used": {
+                    "target_length": target_length,
+                    "secondary_keywords": secondary_keywords,
+                    "custom_outline": blog_outline is not None
+                }
+            }
+        }
+    
+    def _generate_custom_outline(self, strategy_data, custom_outline, target_length, secondary_keywords):
+        """Generate outline with custom parameters"""
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        from langchain_core.messages import HumanMessage, SystemMessage
+        import json
+        
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-pro",
+            google_api_key=os.getenv("GOOGLE_GEMINI_API_KEY"),
+            temperature=0.3,
+            max_tokens=8192
+        )
+        
+        # Build custom context
+        target_word_count = "2500-3500 words"  # default
+        if target_length:
+            if any(word in target_length.lower() for word in ['short', '1000', '1500']):
+                target_word_count = "1000-1500 words"
+            elif any(word in target_length.lower() for word in ['medium', '2000', '2500']):
+                target_word_count = "2000-2500 words"
+            elif any(word in target_length.lower() for word in ['long', '3000', '4000']):
+                target_word_count = "3000-4000 words"
+            elif any(char.isdigit() for char in target_length):
+                target_word_count = target_length + " words"
+        
+        custom_requirements = ""
+        if secondary_keywords:
+            custom_requirements += f"\nSecondary Keywords to Include: {secondary_keywords}"
+        if custom_outline:
+            custom_requirements += f"\nCustom Outline Requirements: {custom_outline}"
+        
+        system_prompt = f"""You are an expert content strategist. Create a detailed blog outline based on competitor analysis.
+        
+        Target Word Count: {target_word_count}
+        {custom_requirements}
+        
+        Return JSON format:
+        {{
+            "content_structure": {{
+                "estimated_word_count": "{target_word_count}",
+                "sections": [
+                    {{
+                        "section_title": "Introduction",
+                        "word_count": "200-300",
+                        "key_points": ["point1", "point2"]
+                    }}
+                ]
+            }}
+        }}"""
+        
+        # Get content gaps from strategy
+        content_gaps = strategy_data.get('content_gaps_analysis', {})
+        gaps_summary = str(content_gaps)[:1000]  # Limit size
+        
+        human_prompt = f"""Based on this competitor analysis, create an optimized blog outline:
+        
+        Content Gaps Found:
+        {gaps_summary}
+        
+        Requirements:
+        - Target length: {target_word_count}
+        - Include sections that address content gaps
+        - SEO optimized structure
+        {custom_requirements}
+        """
+        
+        try:
+            messages = [SystemMessage(content=system_prompt), HumanMessage(content=human_prompt)]
+            response = llm.invoke(messages)
+            
+            # Parse response
+            outline_data = json.loads(response.content)
+            return outline_data
+            
+        except Exception as e:
+            logger.error(f"Error generating custom outline: {str(e)}")
+            # Fallback to original outline generation
+            from seo_content_automation import generate_blog_outline
+            return generate_blog_outline(strategy_data)
+    
+    def _generate_enhanced_blog_post(self, outline_data, analysis_results, target_length):
+        """Generate blog post with enhanced formatting and hyperlinks"""
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        from langchain_core.messages import HumanMessage, SystemMessage
+        import json
+        
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-pro",
+            google_api_key=os.getenv("GOOGLE_GEMINI_API_KEY"),
+            temperature=0.3,
+            max_tokens=8192
+        )
+        
+        # Get comprehensive tool links for context
+        tool_links_context = self._get_tool_links_context()
+        
+        # Extract outline structure
+        content_structure = outline_data.get("content_structure", {})
+        sections = content_structure.get("sections", [])
+        target_word_count = content_structure.get("estimated_word_count", "2500-3500 words")
+        
+        # Override target word count if specified
+        if target_length:
+            target_word_count = target_length
+        
+        system_prompt = f"""You are an expert blog writer. Create comprehensive, SEO-optimized content with proper formatting.
+
+        IMPORTANT FORMATTING REQUIREMENTS:
+        1. ALWAYS add clickable links when mentioning tools, platforms, or services
+        2. Use this format: [Tool Name](URL) - for example: [ChatGPT](https://chat.openai.com)
+        3. Create well-formatted tables using markdown table syntax with proper headers
+        4. Include relevant external links to authoritative sources
+        5. Target word count: {target_word_count}
+        6. Use engaging, informative tone
+
+        AVAILABLE TOOL LINKS (use these when mentioning tools):
+        {tool_links_context}
+        
+        Return JSON:
+        {{
+            "blog_post": {{
+                "title": "SEO optimized title",
+                "content": "Full blog content with proper formatting and clickable links",
+                "word_count": "actual word count"
+            }},
+            "seo_meta": {{
+                "meta_title": "meta title",
+                "meta_description": "meta description"
+            }}
+        }}"""
+        
+        # Build detailed prompt with sections
+        sections_text = ""
+        for section in sections:
+            sections_text += f"- {section.get('section_title', 'Section')}: {section.get('word_count', '300-400')} words\n"
+            key_points = section.get('key_points', [])
+            if key_points:
+                sections_text += f"  Key points: {', '.join(key_points[:3])}\n"
+        
+        human_prompt = f"""Create a comprehensive blog post following this structure:
+        
+        SECTIONS TO INCLUDE:
+        {sections_text}
+        
+        REQUIREMENTS:
+        - Target length: {target_word_count}
+        - When mentioning any tools, platforms, or services, format them as clickable links using the URLs provided above
+        - Example: "You can use [ChatGPT](https://chat.openai.com) for content generation"
+        - Create comparison tables with proper markdown formatting when comparing tools or features
+        - Include relevant external links to authoritative sources and official websites
+        - SEO optimized for the main keyword
+        - Professional, engaging tone with actionable insights
+        - Use tables for data comparisons, tool features, or step-by-step processes
+        """
+        
+        try:
+            messages = [SystemMessage(content=system_prompt), HumanMessage(content=human_prompt)]
+            response = llm.invoke(messages)
+            
+            # Parse response
+            blog_data = json.loads(response.content)
+            
+            # Post-process content to add any missed links
+            if "blog_post" in blog_data and "content" in blog_data["blog_post"]:
+                blog_data["blog_post"]["content"] = self._add_automatic_links(blog_data["blog_post"]["content"])
+            
+            return blog_data
+            
+        except Exception as e:
+            logger.error(f"Error generating enhanced blog post: {str(e)}")
+            # Fallback to original blog generation
+            from seo_content_automation import generate_blog_post
+            return generate_blog_post(outline_data, analysis_results)
+    
+    def _get_tool_links_context(self):
+        """Get formatted context of available tool links for AI generation"""
+        tool_map = self._get_comprehensive_tool_mapping()
+        
+        context_lines = []
+        for category, tools in tool_map.items():
+            context_lines.append(f"\n{category.upper()}:")
+            for tool_name, url in tools.items():
+                context_lines.append(f"- {tool_name}: {url}")
+        
+        return "\n".join(context_lines)
+    
+    def _get_comprehensive_tool_mapping(self):
+        """Comprehensive mapping of tool names to their URLs"""
+        return {
+            "AI_TOOLS": {
+                "ChatGPT": "https://chat.openai.com",
+                "Claude": "https://claude.ai",
+                "Gemini": "https://gemini.google.com",
+                "Copilot": "https://copilot.microsoft.com",
+                "GitHub Copilot": "https://github.com/features/copilot",
+                "Midjourney": "https://midjourney.com",
+                "DALL-E": "https://openai.com/dall-e",
+                "Stable Diffusion": "https://stability.ai",
+                "Jasper": "https://jasper.ai",
+                "Copy.ai": "https://copy.ai",
+                "Writesonic": "https://writesonic.com",
+                "Grammarly": "https://grammarly.com",
+                "QuillBot": "https://quillbot.com"
+            },
+            "CODING_TOOLS": {
+                "Visual Studio Code": "https://code.visualstudio.com",
+                "VS Code": "https://code.visualstudio.com",
+                "PyCharm": "https://jetbrains.com/pycharm",
+                "IntelliJ IDEA": "https://jetbrains.com/idea",
+                "Sublime Text": "https://sublimetext.com",
+                "Atom": "https://atom.io",
+                "Vim": "https://vim.org",
+                "Emacs": "https://gnu.org/software/emacs",
+                "WebStorm": "https://jetbrains.com/webstorm",
+                "Android Studio": "https://developer.android.com/studio",
+                "Xcode": "https://developer.apple.com/xcode"
+            },
+            "DEV_PLATFORMS": {
+                "GitHub": "https://github.com",
+                "GitLab": "https://gitlab.com",
+                "Bitbucket": "https://bitbucket.org",
+                "Stack Overflow": "https://stackoverflow.com",
+                "CodePen": "https://codepen.io",
+                "JSFiddle": "https://jsfiddle.net",
+                "Repl.it": "https://replit.com",
+                "Glitch": "https://glitch.com",
+                "Heroku": "https://heroku.com",
+                "Netlify": "https://netlify.com",
+                "Vercel": "https://vercel.com",
+                "AWS": "https://aws.amazon.com",
+                "Google Cloud": "https://cloud.google.com",
+                "Azure": "https://azure.microsoft.com"
+            },
+            "DESIGN_TOOLS": {
+                "Figma": "https://figma.com",
+                "Adobe XD": "https://adobe.com/products/xd.html",
+                "Sketch": "https://sketch.com",
+                "Canva": "https://canva.com",
+                "Adobe Photoshop": "https://adobe.com/products/photoshop.html",
+                "Adobe Illustrator": "https://adobe.com/products/illustrator.html",
+                "InVision": "https://invisionapp.com",
+                "Framer": "https://framer.com",
+                "Principle": "https://principleformac.com"
+            },
+            "FRAMEWORKS": {
+                "React": "https://reactjs.org",
+                "Vue.js": "https://vuejs.org",
+                "Angular": "https://angular.io",
+                "Django": "https://djangoproject.com",
+                "Flask": "https://flask.palletsprojects.com",
+                "Express.js": "https://expressjs.com",
+                "Next.js": "https://nextjs.org",
+                "Nuxt.js": "https://nuxtjs.org",
+                "Laravel": "https://laravel.com",
+                "Ruby on Rails": "https://rubyonrails.org",
+                "Spring Boot": "https://spring.io/projects/spring-boot"
+            },
+            "DATABASES": {
+                "MongoDB": "https://mongodb.com",
+                "PostgreSQL": "https://postgresql.org",
+                "MySQL": "https://mysql.com",
+                "Redis": "https://redis.io",
+                "Firebase": "https://firebase.google.com",
+                "Supabase": "https://supabase.com",
+                "PlanetScale": "https://planetscale.com"
+            },
+            "PRODUCTIVITY": {
+                "Notion": "https://notion.so",
+                "Obsidian": "https://obsidian.md",
+                "Roam Research": "https://roamresearch.com",
+                "Trello": "https://trello.com",
+                "Asana": "https://asana.com",
+                "Jira": "https://atlassian.com/software/jira",
+                "Slack": "https://slack.com",
+                "Discord": "https://discord.com",
+                "Microsoft Teams": "https://microsoft.com/en-us/microsoft-teams",
+                "Zoom": "https://zoom.us"
+            },
+            "ANALYTICS": {
+                "Google Analytics": "https://analytics.google.com",
+                "Mixpanel": "https://mixpanel.com",
+                "Amplitude": "https://amplitude.com",
+                "Hotjar": "https://hotjar.com",
+                "Google Tag Manager": "https://tagmanager.google.com"
+            }
+        }
+    
+    def _add_automatic_links(self, content):
+        """Automatically add links to mentioned tools in content"""
+        tool_map = self._get_comprehensive_tool_mapping()
+        
+        # Flatten the tool mapping for easier search
+        all_tools = {}
+        for category, tools in tool_map.items():
+            all_tools.update(tools)
+        
+        # Sort by length (longest first) to avoid partial matches
+        sorted_tools = sorted(all_tools.items(), key=lambda x: len(x[0]), reverse=True)
+        
+        modified_content = content
+        
+        for tool_name, url in sorted_tools:
+            # Create case-insensitive pattern that doesn't match already linked text
+            pattern = rf'(?<!\[)(?<!\]\()({re.escape(tool_name)})(?!\]\()'
+            
+            # Replace only if the tool is mentioned but not already linked
+            def replace_match(match):
+                return f"[{match.group(1)}]({url})"
+            
+            modified_content = re.sub(pattern, replace_match, modified_content, flags=re.IGNORECASE)
+        
+        return modified_content
 
     def get_generated_files_dir(self):
         """Get the directory where generated files are stored"""
