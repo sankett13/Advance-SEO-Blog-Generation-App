@@ -125,6 +125,9 @@ STATICFILES_DIRS = [
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Blog generation settings
+OPTIMIZE_FOR_LOW_MEMORY = False  # Set to True in memory-constrained environments
+
 # Logging configuration
 LOGGING = {
     'version': 1,

@@ -64,6 +64,9 @@ WHITENOISE_AUTOREFRESH = True
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Blog generation settings - optimize for memory in production
+OPTIMIZE_FOR_LOW_MEMORY = True  # Enable memory optimization for Render/Railway
+
 # Security settings (relaxed for SQLite deployment)
 SECURE_SSL_REDIRECT = False
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

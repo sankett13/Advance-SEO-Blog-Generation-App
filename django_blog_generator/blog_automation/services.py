@@ -61,6 +61,18 @@ class SEOBlogGenerator:
         Returns:
             dict: Result containing blog content and metadata
         """
+        # Parse target_length to get numeric word count if specified
+        target_word_count = None
+        if target_length:
+            import re
+            numeric_values = re.findall(r'\d+', target_length)
+            if numeric_values:
+                target_word_count = int(numeric_values[0])
+                logger.info(f"Parsed target word count: {target_word_count} words")
+            else:
+                logger.info(f"No numeric word count found in target_length: {target_length}")
+        else:
+            logger.info("No target_length specified")
         try:
             # Check for required environment variables
             if not os.getenv('GOOGLE_GEMINI_API_KEY'):
@@ -84,9 +96,6 @@ class SEOBlogGenerator:
             logger.info(f"Number of competitors to analyze: {num_competitors}")
             logger.info(f"Optional parameters - Secondary keywords: {secondary_keywords}, Outline: {blog_outline}, Length: {target_length}")
             
-            # Note: The original create_complete_blog_workflow doesn't support the optional parameters yet
-            # This is a future enhancement opportunity to modify the prompts with custom outlines/length/secondary keywords
-            
             # Check if the original functions are available
             if not create_complete_blog_workflow:
                 return {
@@ -102,24 +111,64 @@ class SEOBlogGenerator:
             gc.collect()
             
             try:
-                # Use full competitor analysis workflow for local development
-                logger.info("Using full competitor analysis workflow")
+                # Log the target length information for debugging
+                if target_word_count:
+                    logger.info(f"Starting blog generation with target word count: {target_word_count}")
                 
-                # Create a modified version that supports target length and other parameters
-                complete_workflow = self._enhanced_blog_workflow(
-                    target_keyword=target_keyword,
-                    num_competitors=num_competitors,
-                    secondary_keywords=secondary_keywords,
-                    blog_outline=blog_outline,
-                    target_length=target_length
-                )
+                # Check if we're running in a memory-constrained environment (e.g., Render's free tier)
+                is_memory_constrained = False
+                
+                # Check Django settings for memory optimization setting
+                try:
+                    from django.conf import settings
+                    if getattr(settings, 'OPTIMIZE_FOR_LOW_MEMORY', False):
+                        is_memory_constrained = True
+                        logger.info("Memory optimization enabled in Django settings")
+                except (ImportError, AttributeError):
+                    pass
+                    
+                # Also check for environment variable (fallback)
+                if os.getenv("OPTIMIZE_FOR_LOW_MEMORY", "").lower() == "true":
+                    is_memory_constrained = True
+                    logger.info("Memory optimization enabled via environment variable")
+                
+                # Choose the appropriate workflow based on memory constraints
+                if is_memory_constrained:
+                    # In memory-constrained environments like Render, use ultra-minimal approach
+                    # Always use ultra-minimal for larger content (>1000 words) in memory-constrained environments
+                    if target_word_count and target_word_count > 1000:
+                        logger.info(f"Using ultra-minimal approach for {target_word_count} word post (memory-constrained environment)")
+                        complete_workflow = self._ultra_minimal_blog_generation(
+                            target_keyword=target_keyword,
+                            secondary_keywords=secondary_keywords,
+                            blog_outline=blog_outline,
+                            target_length=f"Exactly {target_word_count} words"
+                        )
+                    else:
+                        # For shorter content in memory-constrained environments, we can still use the enhanced workflow
+                        logger.info(f"Using enhanced workflow for shorter content ({target_word_count} words) even in memory-constrained environment")
+                        complete_workflow = self._enhanced_blog_workflow(
+                            target_keyword=target_keyword,
+                            num_competitors=min(num_competitors, 2),  # Limit competitors to save memory
+                            secondary_keywords=secondary_keywords,
+                            blog_outline=blog_outline,
+                            target_length=target_length
+                        )
+                else:
+                    # For local development or non-memory-constrained environments, always use full workflow
+                    logger.info(f"Using full competitor analysis workflow with enhanced parameters (non-memory-constrained environment)")
+                    
+                    # Create a modified version that supports target length and other parameters
+                    complete_workflow = self._enhanced_blog_workflow(
+                        target_keyword=target_keyword,
+                        num_competitors=num_competitors,
+                        secondary_keywords=secondary_keywords,
+                        blog_outline=blog_outline,
+                        target_length=target_length
+                    )
             finally:
                 # Clean up memory
                 gc.collect()
-            
-            # Note: For now, the original script doesn't support custom outlines/length/secondary keywords
-            # These could be implemented by modifying the content generation prompts
-            # This is a future enhancement opportunity
             
             if "error" in complete_workflow:
                 return {
@@ -128,13 +177,108 @@ class SEOBlogGenerator:
                     'content': None
                 }
             
-            # Extract the results
-            blog_post = complete_workflow.get('blog_post', {})
-            formatted_post = complete_workflow.get('formatted_post', '')
-            content_strategy = complete_workflow.get('content_strategy', {})
+            # Extract the results with robust error handling
+            try:
+                # Get blog post data with fallbacks
+                if isinstance(complete_workflow, dict):
+                    blog_post = complete_workflow.get('blog_post', {})
+                    if not blog_post and 'content' in complete_workflow:
+                        # Alternative structure
+                        blog_post = {'blog_post': {'content': complete_workflow['content']}}
+                else:
+                    logger.warning(f"Complete workflow has unexpected type: {type(complete_workflow)}")
+                    blog_post = {'blog_post': {'content': str(complete_workflow)}}
+                
+                # Get formatted post with fallbacks
+                formatted_post = complete_workflow.get('formatted_post', '') if isinstance(complete_workflow, dict) else ''
+                
+                # Try to extract content strategy
+                content_strategy = complete_workflow.get('content_strategy', {}) if isinstance(complete_workflow, dict) else {}
+                
+            except Exception as extract_error:
+                logger.error(f"Error extracting workflow results: {str(extract_error)}")
+                # Set basic fallback values
+                blog_post = {}
+                formatted_post = str(complete_workflow)
+                content_strategy = {}
             
-            # Get word count
-            word_count = blog_post.get('blog_post', {}).get('word_count', 'N/A')
+            # Validate and ensure formatted post is a string
+            if not isinstance(formatted_post, str):
+                logger.warning(f"Formatted post is not a string: {type(formatted_post)}. Converting to string.")
+                try:
+                    if isinstance(formatted_post, dict) and 'content' in formatted_post:
+                        formatted_post = formatted_post['content']
+                    elif isinstance(blog_post, dict) and 'content' in blog_post:
+                        formatted_post = blog_post['content']
+                    elif isinstance(blog_post, dict) and 'blog_post' in blog_post and 'content' in blog_post['blog_post']:
+                        formatted_post = blog_post['blog_post']['content']
+                    else:
+                        formatted_post = str(formatted_post)
+                except Exception as convert_error:
+                    logger.error(f"Error converting formatted post to string: {str(convert_error)}")
+                    formatted_post = "Error retrieving formatted content. Please try again."
+            
+            # Get actual word count
+            actual_content = formatted_post if formatted_post else ""
+            actual_word_count = len(actual_content.split())
+            
+            # Final check for target word count compliance
+            # Increased tolerance to 30% to allow more flexibility (900-1300 words for a 1000-word target)
+            if target_word_count and abs(actual_word_count - target_word_count) > target_word_count * 0.3:  # 30% tolerance
+                logger.warning(f"Final word count check failed - Target: {target_word_count}, Actual: {actual_word_count}")
+                logger.info(f"Word count is outside acceptable range of {int(target_word_count * 0.7)}-{int(target_word_count * 1.3)}")
+                
+                # One last attempt with direct content trimming/padding
+                try:
+                    from langchain_google_genai import ChatGoogleGenerativeAI
+                    from langchain_core.messages import SystemMessage, HumanMessage
+                    
+                    logger.info(f"Attempting final word count adjustment: {actual_word_count} → {target_word_count}")
+                    
+                    # Initialize model
+                    llm = ChatGoogleGenerativeAI(
+                        model="gemini-2.5-flash",  # Use faster model for simple task
+                        google_api_key=os.getenv("GOOGLE_GEMINI_API_KEY"),
+                        temperature=0.1,  # Low temperature for more predictable output
+                        max_tokens=8192
+                    )
+                    
+                    # Create prompt
+                    if actual_word_count > target_word_count:
+                        # Need to shorten content
+                        system_message = f"You are an expert editor. Shorten this content to EXACTLY {target_word_count} words while preserving meaning and quality."
+                    else:
+                        # Need to expand content
+                        system_message = f"You are an expert editor. Expand this content to EXACTLY {target_word_count} words while maintaining quality and coherence."
+                    
+                    messages = [
+                        SystemMessage(content=system_message),
+                        HumanMessage(content=f"Original content ({actual_word_count} words):\n\n{formatted_post}\n\nEdit to {target_word_count} words, keeping the same structure and headings. No extra commentary.")
+                    ]
+                    
+                    # Get response
+                    response = llm.invoke(messages)
+                    adjusted_content = response.content
+                    
+                    # Verify word count
+                    new_word_count = len(adjusted_content.split())
+                    logger.info(f"Word count after adjustment: {new_word_count}")
+                    
+                    # Use the adjusted content if it's closer to target
+                    if abs(new_word_count - target_word_count) < abs(actual_word_count - target_word_count):
+                        formatted_post = adjusted_content
+                        actual_word_count = new_word_count
+                        logger.info(f"Using adjusted content: {new_word_count} words")
+                    
+                except Exception as adjust_error:
+                    logger.error(f"Final word count adjustment failed: {adjust_error}")
+            
+            # Set the final word count with acceptable range
+            word_count = f"{actual_word_count} words"
+            if target_word_count:
+                acceptable_min = int(target_word_count * 0.7)
+                acceptable_max = int(target_word_count * 1.3)
+                word_count += f" (target: {target_word_count}, acceptable range: {acceptable_min}-{acceptable_max})"
             
             return {
                 'success': True,
@@ -359,7 +503,15 @@ class SEOBlogGenerator:
     
     def _clean_markdown_formatting(self, text):
         """Remove markdown formatting and return clean text"""
-        # Remove markdown bold/italic
+        # Remove trailing and leading asterisks that might appear in headings
+        text = re.sub(r':\s*\*+$', ':', text)  # Remove trailing asterisks after colons
+        text = re.sub(r'\s*\*+$', '', text)    # Remove any trailing asterisks at the end
+        
+        # Remove leading double asterisks that appear in headings or features like **Primary Use Case
+        text = re.sub(r'^\*\*\s*', '', text)   # Remove leading ** at beginning of line
+        text = re.sub(r'^\*\s*', '', text)     # Remove leading * at beginning of line
+        
+        # Remove markdown bold/italic - but preserve text inside
         text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)  # **bold**
         text = re.sub(r'\*([^*]+)\*', r'\1', text)      # *italic*
         text = re.sub(r'__([^_]+)__', r'\1', text)      # __bold__
@@ -368,8 +520,8 @@ class SEOBlogGenerator:
         # Handle code blocks
         text = re.sub(r'`([^`]+)`', r'\1', text)        # `code`
         
-        # Remove markdown links but keep the text and URL
-        text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1 (\2)', text)
+        # Remove markdown links but keep the text and URL - we're not auto-linking anymore
+        text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1', text)  # Just keep the text, drop the URL
         
         return text
     
@@ -427,6 +579,90 @@ class SEOBlogGenerator:
         
         hyperlink.append(run)
         paragraph._p.append(hyperlink)
+    
+    def _safe_format_blog_post(self, blog_post_data):
+        """
+        Safely formats a blog post with robust error handling
+        
+        Args:
+            blog_post_data: Data to format (could be dict, string or other)
+            
+        Returns:
+            str: Formatted blog post or error message
+        """
+        try:
+            # Import formatting function
+            from seo_content_automation import format_blog_post_for_publication
+            
+            # Handle different input types
+            if isinstance(blog_post_data, str):
+                # If already a string, create a compatible dict structure
+                logger.info("Converting string content to compatible format for formatting")
+                formatted_dict = {
+                    "blog_post": {
+                        "title": "Generated Blog Post",
+                        "content": blog_post_data,
+                        "word_count": len(blog_post_data.split())
+                    }
+                }
+                return format_blog_post_for_publication(formatted_dict)
+                
+            elif isinstance(blog_post_data, dict):
+                # Check if it has the expected structure
+                if "blog_post" not in blog_post_data:
+                    logger.warning("Blog post data missing 'blog_post' key, creating compatible structure")
+                    # Create compatible structure
+                    content = ""
+                    title = ""
+                    
+                    # Try to extract content from various possible locations
+                    if "content" in blog_post_data:
+                        content = blog_post_data["content"]
+                    elif "formatted_content" in blog_post_data:
+                        content = blog_post_data["formatted_content"]
+                    
+                    # Try to extract title
+                    if "title" in blog_post_data:
+                        title = blog_post_data["title"]
+                    
+                    formatted_dict = {
+                        "blog_post": {
+                            "title": title,
+                            "content": content,
+                            "word_count": len(str(content).split())
+                        }
+                    }
+                    return format_blog_post_for_publication(formatted_dict)
+                else:
+                    # Has the expected structure
+                    return format_blog_post_for_publication(blog_post_data)
+            else:
+                # Handle any other type by converting to string
+                logger.warning(f"Unexpected blog post data type: {type(blog_post_data)}")
+                content_str = str(blog_post_data)
+                formatted_dict = {
+                    "blog_post": {
+                        "title": "Generated Blog Post",
+                        "content": content_str,
+                        "word_count": len(content_str.split())
+                    }
+                }
+                return format_blog_post_for_publication(formatted_dict)
+                
+        except Exception as e:
+            logger.error(f"Error in safe formatting: {str(e)}")
+            # Emergency fallback - return as-is if string or convert to string
+            if isinstance(blog_post_data, str):
+                return blog_post_data
+            elif isinstance(blog_post_data, dict):
+                if "blog_post" in blog_post_data and "content" in blog_post_data["blog_post"]:
+                    return blog_post_data["blog_post"]["content"]
+                elif "content" in blog_post_data:
+                    return blog_post_data["content"]
+                else:
+                    return str(blog_post_data)
+            else:
+                return str(blog_post_data)
     
     def _memory_efficient_blog_workflow(self, target_keyword, num_competitors=2):
         """
@@ -596,8 +832,23 @@ class SEOBlogGenerator:
 
     def _ultra_minimal_blog_generation(self, target_keyword, secondary_keywords=None, blog_outline=None, target_length=None):
         """
-        Ultra-minimal blog generation that avoids all memory-intensive operations
-        Perfect for Render's free tier constraints
+        Ultra-minimal blog generation that avoids all memory-intensive operations.
+        Perfect for Render's free tier or other memory-constrained environments.
+        
+        This method:
+        1. Skips all competitor analysis (saves significant memory)
+        2. Uses the smaller Gemini Flash model instead of Pro
+        3. Uses minimal token counts and simplified prompts
+        4. Implements aggressive memory cleanup
+        
+        IMPORTANT NOTE: This method is intended ONLY for memory-constrained environments 
+        like Render's free tier where the full workflow would crash due to memory limits.
+        
+        For local development or environments with sufficient memory, the full
+        _enhanced_blog_workflow should be used instead for better quality results.
+        
+        The OPTIMIZE_FOR_LOW_MEMORY setting in Django settings controls whether
+        this approach is used automatically in memory-constrained environments.
         """
         import gc
         from langchain_google_genai import ChatGoogleGenerativeAI
@@ -617,33 +868,46 @@ class SEOBlogGenerator:
                 max_retries=1  # Reduce retries
             )
             
-            # Build context from user inputs only (no external API calls)
+            # Build context from user inputs with improved word count handling
             user_context = ""
+            word_count_target = "1200-1800"  # default
+            
             if secondary_keywords:
                 user_context += f"\nSecondary Keywords: {secondary_keywords}"
             if blog_outline:
                 user_context += f"\nSuggested Outline: {blog_outline}"
+                
+            # Enhanced target length handling
             if target_length:
+                import re
+                numeric_values = re.findall(r'\d+', target_length)
+                if numeric_values:
+                    word_count_target = numeric_values[0]
+                    logger.info(f"Ultra-minimal generation with specific word count: {word_count_target}")
                 user_context += f"\nTarget Length: {target_length}"
             
-            # Ultra-simple system prompt - avoid JSON to reduce parsing issues
-            system_prompt = """You are an expert blog writer. Create a comprehensive, SEO-optimized blog post in markdown format. Start with a clear title and write informative content."""
+            # Ultra-simple system prompt with strong word count emphasis and exact title
+            system_prompt = f"""You are an expert blog writer. Create a comprehensive, SEO-optimized blog post in markdown format with EXACTLY {word_count_target} words. Use this EXACT title: "{target_keyword}" and write informative content. The word count is a strict requirement."""
             
-            # Simple human prompt - no complex analysis
-            human_prompt = f"""Write a comprehensive blog post about: "{target_keyword}"
+            # Simple human prompt with strict word count emphasis and exact title requirement
+            human_prompt = f"""Write a comprehensive blog post with this EXACT title: "{target_keyword}"
             
             {user_context}
             
-            Requirements:
-            - Start with a clear title (use # for main title)
-            - 1200-1800 words
+            STRICT REQUIREMENTS:
+            - Use the EXACT title provided: "{target_keyword}" - do not change or generate a new title
+            - Write EXACTLY {word_count_target} words - this is a hard requirement
+            - Start with the title as a heading (use # for main title)
             - Use ## for H2 headings and ### for H3 headings  
+            - DO NOT use any asterisks (*) anywhere in headings or section titles
+            - DO NOT use feature names with asterisks like "**Primary Use Case" - use plain text
+            - DO NOT add hyperlinks in text - keep text clean without links
             - SEO optimized for the keyword
             - Include introduction and conclusion
             - Practical and informative
-            - Write everything in markdown format
+            - Write everything in simple markdown format with no bold/italic formatting in headings
             
-            Please write the complete blog post now."""
+            Please write the complete blog post now, counting your words carefully."""
             
             # Generate the blog post
             messages = [
@@ -711,9 +975,17 @@ class SEOBlogGenerator:
                 }
             }
             
-            # Format the post using the original function
-            from seo_content_automation import format_blog_post_for_publication
-            formatted_post = format_blog_post_for_publication(blog_post_data)
+            # Format the post using our safe wrapper function
+            try:
+                formatted_post = self._safe_format_blog_post(blog_post_data)
+                logger.info("Ultra-minimal blog formatted successfully")
+            except Exception as format_error:
+                logger.error(f"Error formatting ultra-minimal blog: {str(format_error)}")
+                # Emergency fallback - use content directly
+                if "blog_post" in blog_post_data and "content" in blog_post_data["blog_post"]:
+                    formatted_post = blog_post_data["blog_post"]["content"]
+                else:
+                    formatted_post = content  # Use the content we extracted earlier
             
             return {
                 'blog_post': blog_post_data,
@@ -866,7 +1138,72 @@ Remember to practice regularly and stay committed to continuous learning."""
         
         # Step 4: Format for publication
         print(f"\n📋 STEP 4: FORMATTING FOR PUBLICATION")
-        formatted_post = format_blog_post_for_publication(blog_post)
+        
+        # Use our safer formatting function that handles any input type
+        try:
+            # If blog_post is None or empty, use a fallback structure
+            if not blog_post:
+                logger.warning("Blog post is empty, creating minimal structure")
+                blog_post = {
+                    "blog_post": {
+                        "title": outline_data.get("title", "Blog Post"),
+                        "content": "No content was generated. Please try again.",
+                        "word_count": 0
+                    }
+                }
+                
+            formatted_post = self._safe_format_blog_post(blog_post)
+            logger.info("Blog post formatted successfully")
+        except Exception as format_error:
+            logger.error(f"Error during blog formatting: {str(format_error)}")
+            # Emergency fallback
+            if isinstance(blog_post, str):
+                formatted_post = blog_post
+            elif isinstance(blog_post, dict) and "blog_post" in blog_post and "content" in blog_post["blog_post"]:
+                formatted_post = blog_post["blog_post"]["content"]
+            else:
+                formatted_post = str(blog_post)
+        
+        # Validate word count and adjust if needed
+        if target_length:
+            import re
+            numeric_target = None
+            
+            # Extract numeric values from target_length
+            numeric_values = re.findall(r'\d+', target_length)
+            if numeric_values:
+                numeric_target = int(numeric_values[0])
+                
+                # Get actual word count
+                formatted_content = formatted_post if formatted_post else ""
+                actual_word_count = len(formatted_content.split())
+                logger.info(f"Word count validation - Target: {numeric_target}, Actual: {actual_word_count}")
+                
+                # If there's a significant difference, try to adjust the content
+                if numeric_target and abs(actual_word_count - numeric_target) > numeric_target * 0.2:  # 20% threshold
+                    logger.warning(f"Word count mismatch: target={numeric_target}, actual={actual_word_count}")
+                    
+                    try:
+                        # Try one more time with ultra-minimal approach and strict word count
+                        print(f"Attempting word count adjustment: {actual_word_count} → {numeric_target}")
+                        adjusted_result = self._ultra_minimal_blog_generation(
+                            target_keyword=target_keyword,
+                            secondary_keywords=secondary_keywords,
+                            blog_outline=f"Exactly {numeric_target} words. {blog_outline if blog_outline else ''}",
+                            target_length=f"Exactly {numeric_target} words"
+                        )
+                        
+                        if "formatted_post" in adjusted_result:
+                            adjusted_content = adjusted_result["formatted_post"]
+                            adjusted_word_count = len(adjusted_content.split())
+                            
+                            if abs(adjusted_word_count - numeric_target) < abs(actual_word_count - numeric_target):
+                                # The adjusted version is closer to target, use it
+                                formatted_post = adjusted_content
+                                blog_post = adjusted_result["blog_post"]
+                                logger.info(f"Using adjusted content: {adjusted_word_count} words")
+                    except Exception as adjust_error:
+                        logger.error(f"Word count adjustment failed: {adjust_error}")
         
         # Return complete workflow result
         return {
@@ -901,15 +1238,24 @@ Remember to practice regularly and stay committed to continuous learning."""
             max_tokens=8192
         )
         
-        # Build custom context
+        # Build custom context with improved word count handling
         target_word_count = "2500-3500 words"  # default
         if target_length:
+            import re
+            # Extract specific numeric values if present
+            numeric_values = re.findall(r'\d+', target_length)
+            
             if any(word in target_length.lower() for word in ['short', '1000', '1500']):
                 target_word_count = "1000-1500 words"
             elif any(word in target_length.lower() for word in ['medium', '2000', '2500']):
                 target_word_count = "2000-2500 words"
             elif any(word in target_length.lower() for word in ['long', '3000', '4000']):
                 target_word_count = "3000-4000 words"
+            elif numeric_values:
+                # Use the exact number specified
+                specific_count = numeric_values[0]
+                target_word_count = f"exactly {specific_count} words"
+                logger.info(f"Setting exact word count for outline: {target_word_count}")
             elif any(char.isdigit() for char in target_length):
                 target_word_count = target_length + " words"
         
@@ -936,7 +1282,12 @@ Remember to practice regularly and stay committed to continuous learning."""
                     }}
                 ]
             }}
-        }}"""
+        }}
+        
+        IMPORTANT: 
+        1. The total word count across all sections MUST sum up to match {target_word_count}
+        2. Ensure each section has an appropriate word count allocation
+        3. NEVER use asterisks (*) in any headings or content descriptions"""
         
         # Get content gaps from strategy
         content_gaps = strategy_data.get('content_gaps_analysis', {})
@@ -948,19 +1299,75 @@ Remember to practice regularly and stay committed to continuous learning."""
         {gaps_summary}
         
         Requirements:
-        - Target length: {target_word_count}
+        - STRICTLY adhere to target length of: {target_word_count}
+        - Distribute word count appropriately across all sections
         - Include sections that address content gaps
         - SEO optimized structure
+        - No trailing asterisks (*) or other markdown symbols in headings
         {custom_requirements}
+        
+        IMPORTANT: Make sure section word counts add up to the specified total word count.
         """
         
         try:
             messages = [SystemMessage(content=system_prompt), HumanMessage(content=human_prompt)]
             response = llm.invoke(messages)
             
-            # Parse response
-            outline_data = json.loads(response.content)
-            return outline_data
+            # Improved error handling for JSON parsing
+            try:
+                # Clean up the response to extract JSON
+                content = response.content.strip()
+                if content.startswith("```json"):
+                    content = content[7:]
+                if content.endswith("```"):
+                    content = content[:-3]
+                content = content.strip()
+                
+                # Log the response for debugging
+                logger.debug(f"Response content preview: {content[:200]}...")
+                
+                # Parse the JSON
+                outline_data = json.loads(content)
+                return outline_data
+            except json.JSONDecodeError as json_error:
+                logger.error(f"JSON parsing error: {json_error}")
+                logger.error(f"Response content preview: {response.content[:200]}...")
+                
+                # Create a fallback outline structure manually
+                fallback_outline = {
+                    "content_structure": {
+                        "estimated_word_count": target_word_count,
+                        "sections": [
+                            {
+                                "section_title": "Introduction",
+                                "word_count": "150-200",
+                                "key_points": ["Introduce the topic", "Set context", "Mention key benefits"]
+                            },
+                            {
+                                "section_title": f"Understanding {strategy_data.get('target_keyword', 'the topic')}",
+                                "word_count": "250-300",
+                                "key_points": ["Define key concepts", "Explain importance", "Provide context"]
+                            },
+                            {
+                                "section_title": "Key Strategies and Approaches",
+                                "word_count": "300-350",
+                                "key_points": ["Main strategies", "Best practices", "Expert tips"]
+                            },
+                            {
+                                "section_title": "Practical Implementation",
+                                "word_count": "250-300",
+                                "key_points": ["Step-by-step guide", "Real examples", "Common challenges"]
+                            },
+                            {
+                                "section_title": "Conclusion",
+                                "word_count": "100-150",
+                                "key_points": ["Summary of key points", "Final recommendations", "Next steps"]
+                            }
+                        ]
+                    }
+                }
+                logger.info(f"Using fallback outline structure with target length: {target_word_count}")
+                return fallback_outline
             
         except Exception as e:
             logger.error(f"Error generating custom outline: {str(e)}")
@@ -989,19 +1396,34 @@ Remember to practice regularly and stay committed to continuous learning."""
         sections = content_structure.get("sections", [])
         target_word_count = content_structure.get("estimated_word_count", "2500-3500 words")
         
-        # Override target word count if specified
+        # Get the original title from analysis_results (this is what the user provided)
+        provided_title = analysis_results.get('target_keyword', '')
+        
+        # Override target word count if specified with better parsing
         if target_length:
-            target_word_count = target_length
+            # Extract numeric values from the target_length string
+            import re
+            numeric_values = re.findall(r'\d+', target_length)
+            if numeric_values:
+                # Use the first numeric value found
+                specific_word_count = numeric_values[0]
+                target_word_count = f"{specific_word_count} words"
+                logger.info(f"Setting specific word count target: {target_word_count}")
+            else:
+                target_word_count = target_length
         
         system_prompt = f"""You are an expert blog writer. Create comprehensive, SEO-optimized content with proper formatting.
 
         IMPORTANT FORMATTING REQUIREMENTS:
-        1. ALWAYS add clickable links when mentioning tools, platforms, or services
-        2. Use this format: [Tool Name](URL) - for example: [ChatGPT](https://chat.openai.com)
-        3. Create well-formatted tables using markdown table syntax with proper headers
-        4. Include relevant external links to authoritative sources
-        5. Target word count: {target_word_count}
+        1. USE THIS EXACT TITLE: "{provided_title}" - DO NOT modify or replace this title
+        2. DO NOT add any automatic links to text - keep text clean without links
+        3. For headings and sections, use standard markdown (# Heading) without any asterisks
+        4. Create well-formatted tables using markdown table syntax with proper headers
+        5. STRICTLY adhere to target word count: {target_word_count}
         6. Use engaging, informative tone
+        7. NEVER use asterisks (*) anywhere in headings or section titles
+        8. DO NOT use double asterisks (**) for feature names or headings like "**Primary Use Case"
+        9. DO NOT use markdown bold or italic formatting for headings or feature names
 
         AVAILABLE TOOL LINKS (use these when mentioning tools):
         {tool_links_context}
@@ -1009,13 +1431,13 @@ Remember to practice regularly and stay committed to continuous learning."""
         Return JSON:
         {{
             "blog_post": {{
-                "title": "SEO optimized title",
+                "title": "{provided_title}",
                 "content": "Full blog content with proper formatting and clickable links",
                 "word_count": "actual word count"
             }},
             "seo_meta": {{
-                "meta_title": "meta title",
-                "meta_description": "meta description"
+                "meta_title": "{provided_title}",
+                "meta_description": "Meta description for {provided_title}"
             }}
         }}"""
         
@@ -1027,40 +1449,142 @@ Remember to practice regularly and stay committed to continuous learning."""
             if key_points:
                 sections_text += f"  Key points: {', '.join(key_points[:3])}\n"
         
-        human_prompt = f"""Create a comprehensive blog post following this structure:
-        
+        human_prompt = f"""Create a comprehensive blog post with this EXACT title: "{provided_title}"
+
         SECTIONS TO INCLUDE:
         {sections_text}
         
         REQUIREMENTS:
-        - Target length: {target_word_count}
-        - When mentioning any tools, platforms, or services, format them as clickable links using the URLs provided above
-        - Example: "You can use [ChatGPT](https://chat.openai.com) for content generation"
+        - USE THE EXACT TITLE PROVIDED: "{provided_title}" - do not change or generate a new title
+        - STRICTLY adhere to the target length of {target_word_count} - this is a hard requirement
+        - DO NOT use links in regular text - keep text clean without hyperlinks
+        - Create simple markdown headings using # and ## symbols only (no asterisks)
         - Create comparison tables with proper markdown formatting when comparing tools or features
-        - Include relevant external links to authoritative sources and official websites
         - SEO optimized for the main keyword
         - Professional, engaging tone with actionable insights
         - Use tables for data comparisons, tool features, or step-by-step processes
+        - DO NOT use double asterisks (**) for feature names like "**Primary Use Case" - use plain text instead
+        - AVOID using any asterisks (*) for formatting headings or feature names
+        - Never use bold or italic formatting for headings or section titles
         """
         
         try:
             messages = [SystemMessage(content=system_prompt), HumanMessage(content=human_prompt)]
             response = llm.invoke(messages)
             
-            # Parse response
-            blog_data = json.loads(response.content)
-            
-            # Post-process content to add any missed links
-            if "blog_post" in blog_data and "content" in blog_data["blog_post"]:
-                blog_data["blog_post"]["content"] = self._add_automatic_links(blog_data["blog_post"]["content"])
-            
-            return blog_data
+            # Improved error handling for JSON parsing
+            try:
+                # Clean up the response to extract JSON
+                content = response.content.strip()
+                if content.startswith("```json"):
+                    content = content[7:]
+                if content.endswith("```"):
+                    content = content[:-3]
+                content = content.strip()
+                
+                # Parse the JSON
+                blog_data = json.loads(content)
+                
+                # We're no longer automatically adding links as requested by the user
+                # (This was causing "ugly" link appearance in text)
+                
+                # Add word count validation
+                if "blog_post" in blog_data:
+                    # Extract actual word count
+                    content_text = blog_data.get("blog_post", {}).get("content", "")
+                    actual_word_count = len(content_text.split())
+                    
+                    # Update the word count in the response
+                    blog_data["blog_post"]["word_count"] = str(actual_word_count) + " words"
+                    
+                    # Log word count for debugging
+                    logger.info(f"Generated blog with {actual_word_count} words (target: {target_word_count})")
+                
+                return blog_data
+                
+            except json.JSONDecodeError as json_error:
+                logger.error(f"JSON parsing error in blog generation: {json_error}")
+                logger.error(f"Response content preview: {response.content[:200]}...")
+                
+                # Create a direct markdown post from the response
+                raw_content = response.content
+                
+                # Build a structured response anyway
+                title = outline_data.get("title", f"Complete Guide to {target_word_count}")
+                if not title:
+                    for section in outline_data.get("content_structure", {}).get("sections", []):
+                        if section.get("section_title") and "introduction" in section.get("section_title", "").lower():
+                            title = section.get("section_title")
+                            break
+                
+                # Count words in the raw content
+                word_count = len(raw_content.split())
+                logger.info(f"Created fallback blog with {word_count} words (target: {target_word_count})")
+                
+                return {
+                    "blog_post": {
+                        "title": title,
+                        "content": raw_content,
+                        "word_count": f"{word_count} words"
+                    },
+                    "seo_meta": {
+                        "meta_title": title,
+                        "meta_description": f"Comprehensive guide about {title}."
+                    },
+                    "generation_method": "direct_content_fallback"
+                }
             
         except Exception as e:
             logger.error(f"Error generating enhanced blog post: {str(e)}")
-            # Fallback to original blog generation
-            from seo_content_automation import generate_blog_post
-            return generate_blog_post(outline_data, analysis_results)
+            # Try an alternative approach with simpler formatting requirements
+            try:
+                # Simplified prompt with exact title requirement and no asterisks
+                simple_system_prompt = f"""You are an expert blog writer. Write a {target_word_count} article in clean markdown format.
+                Use this EXACT title: "{provided_title}" - do not change or generate a different title.
+                Include proper headings with # and ## syntax only. DO NOT use asterisks (*) in headings or feature names.
+                DO NOT create links in text. Focus on providing valuable information with clean formatting."""
+                
+                simple_human_prompt = f"""Write a comprehensive blog post with this EXACT title: "{provided_title}", exactly {target_word_count} in length.
+                
+                Start with the title as a heading, followed by a clear introduction.
+                Then organize the content with logical sections using headings.
+                End with a conclusion that summarizes key points.
+                
+                IMPORTANT FORMATTING RULES:
+                - Use only # and ## for headings (no asterisks)
+                - DO NOT use formatting like **Primary Use Case** - just use plain text
+                - DO NOT add links in text
+                - Keep formatting clean and simple
+                - NO bold or italic formatting in headings or feature names"""
+                
+                simple_messages = [
+                    SystemMessage(content=simple_system_prompt),
+                    HumanMessage(content=simple_human_prompt)
+                ]
+                
+                simple_response = llm.invoke(simple_messages)
+                
+                # Process the direct response
+                direct_content = simple_response.content
+                word_count = len(direct_content.split())
+                
+                return {
+                    "blog_post": {
+                        "title": outline_data.get("title", "Complete Blog Post"),
+                        "content": direct_content,
+                        "word_count": f"{word_count} words"
+                    },
+                    "seo_meta": {
+                        "meta_title": outline_data.get("title", "Complete Blog Post"),
+                        "meta_description": "Comprehensive guide on the topic."
+                    },
+                    "generation_method": "simplified_fallback"
+                }
+            except Exception as fallback_error:
+                logger.error(f"Fallback generation also failed: {fallback_error}")
+                # Last resort fallback
+                from seo_content_automation import generate_blog_post
+                return generate_blog_post(outline_data, analysis_results)
     
     def _get_tool_links_context(self):
         """Get formatted context of available tool links for AI generation"""
