@@ -11,7 +11,7 @@ class BlogGenerationForm(forms.ModelForm):
         widgets = {
             'title': forms.TextInput(attrs={
                 'class': 'form-control',
-                'placeholder': 'e.g., "Best AI Tools for Email Marketing 2025"',
+                'placeholder': 'e.g., "Best AI Tools for Email Marketing 2025" or multiple titles separated by commas',
                 'required': True
             }),
             'primary_keywords': forms.Textarea(attrs={
@@ -42,7 +42,7 @@ class BlogGenerationForm(forms.ModelForm):
             })
         }
         labels = {
-            'title': 'Blog Title or Target Topic',
+            'title': 'Blog Title(s) or Target Topic(s)',
             'primary_keywords': 'Primary Keywords (comma-separated)',
             'num_competitors': 'Number of Competitors to Analyze',
             'secondary_keywords': 'Secondary Keywords (Optional)',
@@ -50,7 +50,7 @@ class BlogGenerationForm(forms.ModelForm):
             'target_length': 'Target Blog Length (Optional)'
         }
         help_texts = {
-            'title': 'Enter the main topic or title for your blog post',
+            'title': 'Enter one or more blog titles/topics separated by commas (e.g., "Blog Title 1, Blog Title 2")',
             'primary_keywords': 'Enter relevant keywords separated by commas',
             'num_competitors': 'Choose how many competitor blogs to analyze (1-10)',
             'secondary_keywords': 'Additional keywords to include in the content',

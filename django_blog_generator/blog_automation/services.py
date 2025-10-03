@@ -9,6 +9,7 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
+from typing import List, Dict, Any, Tuple
 
 # Add the parent directory to sys.path to import the original script
 parent_dir = Path(__file__).resolve().parent.parent.parent
@@ -38,6 +39,77 @@ from django.core.files.base import ContentFile
 import tempfile
 
 logger = logging.getLogger(__name__)
+
+
+def parse_blog_titles(titles_input: str, max_titles: int = 5) -> Tuple[List[str], Dict[str, Any]]:
+    """
+    Parse a comma-separated string of blog titles into a list of individual titles.
+    
+    Args:
+        titles_input (str): Comma-separated blog titles
+        max_titles (int): Maximum number of titles to process at once
+        
+    Returns:
+        Tuple[List[str], Dict[str, Any]]: List of individual blog titles and parsing info
+    """
+    parsing_info = {
+        'original_count': 0,
+        'processed_count': 0,
+        'duplicates_removed': 0,
+        'empty_removed': 0,
+        'truncated': False,
+        'warnings': []
+    }
+    
+    if not titles_input or not titles_input.strip():
+        return [], parsing_info
+    
+    # Split by commas and clean
+    raw_titles = [title.strip() for title in titles_input.split(',')]
+    parsing_info['original_count'] = len(raw_titles)
+    
+    # Filter out empty titles
+    non_empty_titles = [title for title in raw_titles if title]
+    parsing_info['empty_removed'] = len(raw_titles) - len(non_empty_titles)
+    
+    if parsing_info['empty_removed'] > 0:
+        parsing_info['warnings'].append(f"Removed {parsing_info['empty_removed']} empty title(s)")
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_titles = []
+    for title in non_empty_titles:
+        title_lower = title.lower()
+        if title_lower not in seen:
+            seen.add(title_lower)
+            unique_titles.append(title)
+        else:
+            parsing_info['duplicates_removed'] += 1
+    
+    if parsing_info['duplicates_removed'] > 0:
+        parsing_info['warnings'].append(f"Removed {parsing_info['duplicates_removed']} duplicate title(s)")
+    
+    # Limit the number of titles
+    if len(unique_titles) > max_titles:
+        logger.warning(f"Too many blog titles ({len(unique_titles)}). Limiting to {max_titles}")
+        parsing_info['truncated'] = True
+        parsing_info['warnings'].append(f"Limited to first {max_titles} titles (from {len(unique_titles)} total)")
+        unique_titles = unique_titles[:max_titles]
+    
+    parsing_info['processed_count'] = len(unique_titles)
+    
+    # Validate title length (optional)
+    for i, title in enumerate(unique_titles):
+        if len(title) > 200:  # Reasonable title length limit
+            unique_titles[i] = title[:200] + "..."
+            parsing_info['warnings'].append(f"Truncated long title: '{title[:50]}...'")
+    
+    # Log the parsed titles
+    logger.info(f"Parsed {len(unique_titles)} blog titles from {parsing_info['original_count']} input titles")
+    if parsing_info['warnings']:
+        logger.info(f"Parsing warnings: {parsing_info['warnings']}")
+    
+    return unique_titles, parsing_info
 
 
 class SEOBlogGenerator:
@@ -1728,6 +1800,106 @@ Remember to practice regularly and stay committed to continuous learning."""
     def get_generated_files_dir(self):
         """Get the directory where generated files are stored"""
         return os.path.join(self.media_root, 'generated_blogs')
+        
+    def generate_multiple_blogs(self, titles_input, primary_keywords, num_competitors=3, secondary_keywords=None, blog_outline=None, target_length=None, max_titles=5) -> Dict[str, Any]:
+        """
+        Generate multiple blogs from a comma-separated list of titles.
+        
+        Args:
+            titles_input (str): Comma-separated blog titles
+            primary_keywords (str): Comma-separated primary keywords
+            num_competitors (int): Number of competitors to analyze
+            secondary_keywords (str): Optional secondary keywords
+            blog_outline (str): Optional custom blog outline
+            target_length (str): Optional target blog length
+            max_titles (int): Maximum number of titles to process at once
+            
+        Returns:
+            dict: Dictionary containing batch processing results and individual blog results
+        """
+        logger.info(f"Starting batch blog generation for input: {titles_input[:100]}...")
+        
+        # Parse the titles with enhanced validation
+        titles, parsing_info = parse_blog_titles(titles_input, max_titles)
+        
+        # Create batch result structure
+        batch_result = {
+            'batch_id': datetime.now().strftime('%Y%m%d_%H%M%S'),
+            'parsing_info': parsing_info,
+            'total_titles': len(titles),
+            'successful_blogs': 0,
+            'failed_blogs': 0,
+            'blog_results': [],
+            'warnings': parsing_info.get('warnings', []),
+            'errors': []
+        }
+        
+        if not titles:
+            batch_result['errors'].append('No valid blog titles provided after parsing.')
+            return batch_result
+        
+        # Add parsing warnings as info messages
+        if parsing_info['warnings']:
+            for warning in parsing_info['warnings']:
+                logger.warning(f"Title parsing: {warning}")
+        
+        # Generate each blog individually with progress tracking
+        for i, title in enumerate(titles, 1):
+            logger.info(f"Processing blog {i}/{len(titles)}: {title}")
+            
+            try:
+                # Call the existing generate_blog method for each title
+                result = self.generate_blog(
+                    title=title,
+                    primary_keywords=primary_keywords,
+                    num_competitors=num_competitors,
+                    secondary_keywords=secondary_keywords,
+                    blog_outline=blog_outline,
+                    target_length=target_length
+                )
+                
+                # Add metadata to the result
+                result['title'] = title
+                result['batch_id'] = batch_result['batch_id']
+                result['position_in_batch'] = i
+                result['generated_at'] = datetime.now().isoformat()
+                
+                batch_result['blog_results'].append(result)
+                
+                # Update counters
+                if result['success']:
+                    batch_result['successful_blogs'] += 1
+                    logger.info(f"✅ Successfully generated blog {i}/{len(titles)}: {title}")
+                else:
+                    batch_result['failed_blogs'] += 1
+                    error_msg = f"❌ Failed to generate blog {i}/{len(titles)}: {title} - {result.get('error', 'Unknown error')}"
+                    logger.error(error_msg)
+                    batch_result['errors'].append(error_msg)
+                
+            except Exception as e:
+                # Handle unexpected errors
+                error_msg = f"❌ Unexpected error generating blog {i}/{len(titles)}: {title} - {str(e)}"
+                logger.error(error_msg)
+                
+                # Create a failed result
+                failed_result = {
+                    'success': False,
+                    'error': str(e),
+                    'content': None,
+                    'title': title,
+                    'batch_id': batch_result['batch_id'],
+                    'position_in_batch': i,
+                    'generated_at': datetime.now().isoformat()
+                }
+                
+                batch_result['blog_results'].append(failed_result)
+                batch_result['failed_blogs'] += 1
+                batch_result['errors'].append(error_msg)
+        
+        # Log final batch summary
+        logger.info(f"Batch {batch_result['batch_id']} completed: {batch_result['successful_blogs']} successful, {batch_result['failed_blogs']} failed")
+        
+        return batch_result
 
 
 # Utility function to check if API keys are configured

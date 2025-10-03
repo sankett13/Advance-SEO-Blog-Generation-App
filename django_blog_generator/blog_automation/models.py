@@ -30,7 +30,7 @@ class BlogGeneration(models.Model):
     
     # Analysis results (stored as JSON)
     competitor_analysis = models.JSONField(blank=True, null=True)
-    blog_outline = models.JSONField(blank=True, null=True)
+    blog_analysis_data = models.JSONField(blank=True, null=True, help_text="Generated blog analysis and outline data")
     
     # File path for generated document
     doc_file_path = models.CharField(max_length=500, blank=True, null=True)
