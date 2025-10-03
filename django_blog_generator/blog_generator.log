@@ -257,3 +257,80 @@ Word count validation - Target: 1000, Actual: 1070
 Batch 20251002_130851 completed: 2 successful, 0 failed
 Document saved to: /Users/sanketpatel/Desktop/NetopDigital/Content_Generation_Automation/django_blog_generator/media/generated_blogs/blog_post_20251002_130309_Top_5_AI_tools_for_SEO_Boot_yo.docx
 Document saved to: /Users/sanketpatel/Desktop/NetopDigital/Content_Generation_Automation/django_blog_generator/media/generated_blogs/blog_post_20251002_131813_Boot_your_SEO_blog_generation_.docx
+Parsed 1 blog titles from 1 input titles
+No primary keywords provided, auto-generating from title: Top AI tools for Email Marketing.
+AI generated empty keywords, using fallback
+Fallback keyword extraction: ['top', 'tools', 'email', 'marketing']
+Auto-generated keywords: top, tools, email, marketing
+Parsed target word count: 1000 words
+Starting blog generation for: Top AI tools for Email Marketing.
+Number of competitors to analyze: 2
+Optional parameters - Secondary keywords: , Outline: , Length: 1000
+Starting blog generation with target word count: 1000
+Using full competitor analysis workflow with enhanced parameters (non-memory-constrained environment)
+Enhanced workflow with target_length: 1000
+Setting specific word count target: 1000 words
+JSON parsing error in blog generation: Extra data: line 12 column 1 (char 8628)
+Response content preview: ```json
+{
+    "blog_post": {
+        "title": "Top AI tools for Email Marketing.",
+        "content": "# Top AI tools for Email Marketing.\n\n## Introduction: Setting the Stage for Success\n\nDid you ...
+Created fallback blog with 1264 words (target: 1000 words)
+Error in safe formatting: 'str' object has no attribute 'get'
+Blog post formatted successfully
+Word count validation - Target: 1000, Actual: 1264
+Word count mismatch: target=1000, actual=1264
+Ultra-minimal generation with specific word count: 1000
+Error in safe formatting: 'str' object has no attribute 'get'
+Ultra-minimal blog formatted successfully
+Using adjusted content: 913 words
+Document saved to: /Users/sanketpatel/Desktop/NetopDigital/Content_Generation_Automation/django_blog_generator/media/generated_blogs/blog_post_20251003_165827_Top_AI_tools_for_Email_Marketi.docx
+Parsed 1 blog titles from 1 input titles
+Parsed target word count: 1000 words
+Starting blog generation for: Top AI tools for Email Marketing.
+Number of competitors to analyze: 2
+Optional parameters - Secondary keywords: , Outline: , Length: 1000
+Starting blog generation with target word count: 1000
+Using full competitor analysis workflow with enhanced parameters (non-memory-constrained environment)
+Enhanced workflow with target_length: 1000
+Setting specific word count target: 1000 words
+Generated blog with 824 words (target: 1000 words)
+Error in safe formatting: 'str' object has no attribute 'get'
+Blog post formatted successfully
+Word count validation - Target: 1000, Actual: 824
+Document saved to: /Users/sanketpatel/Desktop/NetopDigital/Content_Generation_Automation/django_blog_generator/media/generated_blogs/blog_post_20251003_170332_Top_AI_tools_for_Email_Marketi.docx
+Parsed 1 blog titles from 1 input titles
+Primary keywords not provided, auto-generating from title: 'Top AI tools for Email Marketing.'
+Generated primary keywords from title 'Top AI tools for Email Marketing.': AI tools for email marketing, email marketing AI, best
+Auto-generated primary keywords: AI tools for email marketing, email marketing AI, best
+Parsed target word count: 2000 words
+Starting blog generation for: Top AI tools for Email Marketing.
+Number of competitors to analyze: 3
+Optional parameters - Secondary keywords: , Outline: , Length: 2000
+Starting blog generation with target word count: 2000
+Using full competitor analysis workflow with enhanced parameters (non-memory-constrained environment)
+Enhanced workflow with target_length: 2000
+Setting specific word count target: 2000 words
+Generated blog with 2121 words (target: 2000 words)
+Error in safe formatting: 'str' object has no attribute 'get'
+Blog post formatted successfully
+Word count validation - Target: 2000, Actual: 2121
+Document saved to: /Users/sanketpatel/Desktop/NetopDigital/Content_Generation_Automation/django_blog_generator/media/generated_blogs/blog_post_20251003_171447_Top_AI_tools_for_Email_Marketi.docx
+Parsed 1 blog titles from 1 input titles
+Primary keywords not provided, auto-generating from title: 'Top AI tools for Email Marketing.'
+Generated primary keywords from title 'Top AI tools for Email Marketing.': 
+Auto-generated primary keywords: 
+Parsed target word count: 2000 words
+Starting blog generation for: Top AI tools for Email Marketing.
+Number of competitors to analyze: 3
+Optional parameters - Secondary keywords: , Outline: , Length: 2000
+Starting blog generation with target word count: 2000
+Using full competitor analysis workflow with enhanced parameters (non-memory-constrained environment)
+Enhanced workflow with target_length: 2000
+Setting specific word count target: 2000 words
+Generated blog with 1726 words (target: 2000 words)
+Error in safe formatting: 'str' object has no attribute 'get'
+Blog post formatted successfully
+Word count validation - Target: 2000, Actual: 1726
+Document saved to: /Users/sanketpatel/Desktop/NetopDigital/Content_Generation_Automation/django_blog_generator/media/generated_blogs/blog_post_20251003_172119_Top_AI_tools_for_Email_Marketi.docx

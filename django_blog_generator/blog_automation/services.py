@@ -117,14 +117,121 @@ class SEOBlogGenerator:
     
     def __init__(self):
         self.media_root = getattr(settings, 'MEDIA_ROOT', tempfile.gettempdir())
+    
+    def generate_primary_keywords_from_title(self, title):
+        """
+        Generate relevant primary keywords based on the blog title using AI
         
-    def generate_blog(self, title, primary_keywords, num_competitors=3, secondary_keywords=None, blog_outline=None, target_length=None):
+        Args:
+            title (str): Blog title or target topic
+            
+        Returns:
+            str: Comma-separated primary keywords
+        """
+        try:
+            # Check if Gemini API key is available
+            if not os.getenv('GOOGLE_GEMINI_API_KEY'):
+                logger.warning("GOOGLE_GEMINI_API_KEY not available, using basic keyword extraction")
+                return self._extract_basic_keywords_from_title(title)
+            
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            from langchain_core.messages import SystemMessage, HumanMessage
+            
+            # Use the efficient Flash model for this simple task
+            llm = ChatGoogleGenerativeAI(
+                model="gemini-2.5-flash",
+                google_api_key=os.getenv("GOOGLE_GEMINI_API_KEY"),
+                temperature=0.2,  # Lower temperature for more consistent keywords
+                max_tokens=200   # Short response needed
+            )
+            
+            system_prompt = """You are an SEO keyword expert. Generate 3-5 relevant primary keywords for blog content based on the given title. 
+            
+            Requirements:
+            - Return only comma-separated keywords
+            - Focus on search-friendly phrases
+            - Include variations of the main topic
+            - Keep keywords concise but specific
+            - No explanations, just the keywords"""
+            
+            human_prompt = f"""Generate primary SEO keywords for this blog title: "{title}"
+            
+            Return format: keyword1, keyword2, keyword3, keyword4"""
+            
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=human_prompt)
+            ]
+            
+            response = llm.invoke(messages)
+            keywords = response.content.strip()
+            
+            # Clean up the keywords (remove quotes, extra spaces, etc.)
+            keywords = keywords.replace('"', '').replace("'", '')
+            keywords = ', '.join([kw.strip() for kw in keywords.split(',') if kw.strip()])
+            
+            logger.info(f"Generated primary keywords from title '{title}': {keywords}")
+            return keywords
+            
+        except Exception as e:
+            logger.error(f"Error generating keywords from title: {str(e)}")
+            # Fallback to basic extraction
+            return self._extract_basic_keywords_from_title(title)
+    
+    def _extract_basic_keywords_from_title(self, title):
+        """
+        Fallback method to extract basic keywords from title without AI
+        
+        Args:
+            title (str): Blog title
+            
+        Returns:
+            str: Comma-separated basic keywords
+        """
+        import re
+        
+        # Remove common stop words
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should'}
+        
+        # Clean title and split into words
+        clean_title = re.sub(r'[^\w\s]', ' ', title.lower())
+        words = [word.strip() for word in clean_title.split() if word.strip() and word not in stop_words and len(word) > 2]
+        
+        # Create keyword variations
+        keywords = []
+        
+        # Add the main title (cleaned)
+        main_keyword = ' '.join(words[:4])  # First 4 significant words
+        if main_keyword:
+            keywords.append(main_keyword)
+        
+        # Add 2-word combinations from the title
+        for i in range(len(words) - 1):
+            two_word = f"{words[i]} {words[i + 1]}"
+            if len(two_word) > 5:  # Avoid very short combinations
+                keywords.append(two_word)
+        
+        # Add individual important words (longer than 4 characters)
+        important_words = [word for word in words if len(word) > 4][:3]  # Top 3 longest words
+        keywords.extend(important_words)
+        
+        # Remove duplicates while preserving order
+        unique_keywords = []
+        for kw in keywords:
+            if kw not in unique_keywords:
+                unique_keywords.append(kw)
+        
+        result = ', '.join(unique_keywords[:5])  # Limit to 5 keywords
+        logger.info(f"Generated basic keywords from title '{title}': {result}")
+        return result
+        
+    def generate_blog(self, title, primary_keywords=None, num_competitors=3, secondary_keywords=None, blog_outline=None, target_length=None):
         """
         Generate a complete blog post using the existing SEO automation script
         
         Args:
             title (str): Blog title or target keyword
-            primary_keywords (str): Comma-separated primary keywords
+            primary_keywords (str): Comma-separated primary keywords (optional - auto-generated if not provided)
             num_competitors (int): Number of competitors to analyze
             secondary_keywords (str): Optional secondary keywords
             blog_outline (str): Optional custom blog outline
@@ -133,6 +240,11 @@ class SEOBlogGenerator:
         Returns:
             dict: Result containing blog content and metadata
         """
+        # Auto-generate primary keywords if not provided
+        if not primary_keywords or not primary_keywords.strip():
+            logger.info(f"Primary keywords not provided, auto-generating from title: '{title}'")
+            primary_keywords = self.generate_primary_keywords_from_title(title)
+            logger.info(f"Auto-generated primary keywords: {primary_keywords}")
         # Parse target_length to get numeric word count if specified
         target_word_count = None
         if target_length:

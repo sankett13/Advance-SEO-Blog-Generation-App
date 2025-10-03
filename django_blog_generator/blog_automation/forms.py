@@ -17,8 +17,8 @@ class BlogGenerationForm(forms.ModelForm):
             'primary_keywords': forms.Textarea(attrs={
                 'class': 'form-control',
                 'rows': 3,
-                'placeholder': 'e.g., ai email marketing tools, email automation, marketing ai',
-                'required': True
+                'placeholder': 'e.g., ai email marketing tools, email automation, marketing ai (Optional - will be auto-generated from title if not provided)',
+                'required': False
             }),
             'num_competitors': forms.NumberInput(attrs={
                 'class': 'form-control',
@@ -43,7 +43,7 @@ class BlogGenerationForm(forms.ModelForm):
         }
         labels = {
             'title': 'Blog Title(s) or Target Topic(s)',
-            'primary_keywords': 'Primary Keywords (comma-separated)',
+            'primary_keywords': 'Primary Keywords (Optional - Auto-generated if empty)',
             'num_competitors': 'Number of Competitors to Analyze',
             'secondary_keywords': 'Secondary Keywords (Optional)',
             'blog_outline': 'Custom Blog Outline (Optional)',
@@ -51,7 +51,7 @@ class BlogGenerationForm(forms.ModelForm):
         }
         help_texts = {
             'title': 'Enter one or more blog titles/topics separated by commas (e.g., "Blog Title 1, Blog Title 2")',
-            'primary_keywords': 'Enter relevant keywords separated by commas',
+            'primary_keywords': 'Enter relevant keywords separated by commas, or leave empty to auto-generate from title',
             'num_competitors': 'Choose how many competitor blogs to analyze (1-10)',
             'secondary_keywords': 'Additional keywords to include in the content',
             'blog_outline': 'Specify a custom structure or outline for the blog',

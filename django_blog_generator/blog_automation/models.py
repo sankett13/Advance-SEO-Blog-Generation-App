@@ -13,7 +13,7 @@ class BlogGeneration(models.Model):
     ]
     
     title = models.CharField(max_length=500, help_text="Blog title or target keyword")
-    primary_keywords = models.TextField(help_text="Primary keywords (comma-separated)")
+    primary_keywords = models.TextField(blank=True, null=True, help_text="Primary keywords (comma-separated) - Optional")
     num_competitors = models.IntegerField(default=3, help_text="Number of competitors to analyze")
     
     # Optional fields for enhanced control
