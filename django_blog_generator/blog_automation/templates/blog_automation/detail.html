@@ -104,12 +104,21 @@
         <h5 class="card-title mb-0">
           <i class="fas fa-file-alt me-2"></i>Generated Content
         </h5>
-        <button
-          class="btn btn-outline-secondary btn-sm"
-          onclick="togglePreview()"
-        >
-          <i class="fas fa-eye me-2"></i>Toggle Preview
-        </button>
+        <div class="btn-group">
+          <button
+            class="btn btn-outline-primary btn-sm"
+            onclick="copyContent()"
+            title="Copy content to clipboard"
+          >
+            <i class="fas fa-copy me-2"></i>Copy
+          </button>
+          <button
+            class="btn btn-outline-secondary btn-sm"
+            onclick="togglePreview()"
+          >
+            <i class="fas fa-eye me-2"></i>Toggle Preview
+          </button>
+        </div>
       </div>
       <div class="card-body">
         <div id="contentPreview" class="content-preview">
@@ -236,6 +245,68 @@
       preview.style.display = "block";
     } else {
       preview.style.display = "none";
+    }
+  }
+
+  async function copyContent() {
+    try {
+      const contentElement = document.getElementById("contentPreview");
+
+      // Get the text content without HTML tags
+      const textContent =
+        contentElement.innerText || contentElement.textContent;
+
+      // Use the modern Clipboard API
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(textContent);
+        showCopyFeedback(true);
+      } else {
+        // Fallback for older browsers
+        const textArea = document.createElement("textarea");
+        textArea.value = textContent;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        const successful = document.execCommand("copy");
+        document.body.removeChild(textArea);
+
+        showCopyFeedback(successful);
+      }
+    } catch (err) {
+      console.error("Failed to copy content: ", err);
+      showCopyFeedback(false);
+    }
+  }
+
+  function showCopyFeedback(success) {
+    const button = event.target.closest("button");
+    const icon = button.querySelector("i");
+    const originalContent = button.innerHTML;
+
+    if (success) {
+      button.innerHTML = '<i class="fas fa-check me-2"></i>Copied!';
+      button.classList.remove("btn-outline-primary");
+      button.classList.add("btn-success");
+
+      setTimeout(() => {
+        button.innerHTML = originalContent;
+        button.classList.remove("btn-success");
+        button.classList.add("btn-outline-primary");
+      }, 2000);
+    } else {
+      button.innerHTML = '<i class="fas fa-exclamation me-2"></i>Failed';
+      button.classList.remove("btn-outline-primary");
+      button.classList.add("btn-danger");
+
+      setTimeout(() => {
+        button.innerHTML = originalContent;
+        button.classList.remove("btn-danger");
+        button.classList.add("btn-outline-primary");
+      }, 2000);
     }
   }
 </script>
