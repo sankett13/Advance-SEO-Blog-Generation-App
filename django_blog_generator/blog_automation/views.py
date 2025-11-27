@@ -108,7 +108,7 @@ def generate_blog(request, blog_id):
                                     content = result['content']
                                     blog_gen.formatted_post = content.get('formatted_post', '')
                                     blog_gen.word_count = content.get('word_count', 'N/A')
-                                    blog_gen.competitor_analysis = content.get('content_strategy', {})
+                                    blog_gen.competitor_analysis = content.get('comprehensive_analysis', content.get('content_strategy', {}))
                                     blog_gen.blog_analysis_data = content.get('blog_post_data', {})
                                     
                                     # Save as document
@@ -148,7 +148,7 @@ def generate_blog(request, blog_id):
                                     content = result['content']
                                     new_blog.formatted_post = content.get('formatted_post', '')
                                     new_blog.word_count = content.get('word_count', 'N/A')
-                                    new_blog.competitor_analysis = content.get('content_strategy', {})
+                                    new_blog.competitor_analysis = content.get('comprehensive_analysis', content.get('content_strategy', {}))
                                     new_blog.blog_analysis_data = content.get('blog_post_data', {})
                                     new_blog.status = 'completed'
                                     new_blog.save()
@@ -215,7 +215,7 @@ def generate_blog(request, blog_id):
                     # Save the results to the database
                     blog_gen.formatted_post = content.get('formatted_post', '')
                     blog_gen.word_count = content.get('word_count', 'N/A')
-                    blog_gen.competitor_analysis = content.get('content_strategy', {})
+                    blog_gen.competitor_analysis = content.get('comprehensive_analysis', content.get('content_strategy', {}))
                     blog_gen.blog_analysis_data = content.get('blog_post_data', {})
                     
                     # Save as document

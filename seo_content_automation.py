@@ -22,9 +22,9 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_GEMINI_API_KEY")
 DATAFORSEO_LOGIN = os.getenv("DATAFORSEO_LOGIN")
 DATAFORSEO_PASSWORD = os.getenv("DATAFORSEO_PASSWORD")
 
-# Initialize Gemini 2.5 Pro model
+# Initialize Gemini 2.5 Flash model
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-pro",
+    model="gemini-2.5-flash",
     google_api_key=GOOGLE_API_KEY,
     temperature=0.3,
     max_tokens=8192
@@ -684,7 +684,16 @@ Your response MUST be in valid JSON format with this exact structure:
             "primary_cta": "main call to action",
             "secondary_ctas": ["cta 1", "cta 2"],
             "placement": "where to place CTAs"
-        }
+        },
+        "tables": [
+            {
+                "table_title": "Short descriptive title for the table",
+                "preferred_section": "Which heading/section this table should appear under (matching a heading in heading_hierarchy)",
+                "columns": ["Column 1", "Column 2", "Column 3"],
+                "row_keys": ["row identifier 1", "row identifier 2"],
+                "notes": "Optional notes about how to fill the rows or special formatting instructions"
+            }
+        ]
     }
 }
 
@@ -729,6 +738,11 @@ Based on this comprehensive analysis, create a blog outline that:
 5. **E-E-A-T**: Include elements that demonstrate experience, expertise, authority, and trust
 6. **User Intent**: Ensure the outline fulfills the user's search intent better than competitors
 7. **PAA Coverage**: Address People Also Ask questions within the content structure
+
+NOTE ABOUT TABLES:
+If the analysis or competitor comparison suggests any content would be better represented as a table (for example: feature comparisons, pricing grids, pros/cons matrices, tool capabilities, or specification comparisons), include a `tables` array in the JSON output. Each table should include: `table_title`, `preferred_section` (the heading where it should appear), `columns` (list of column names), `row_keys` (identifiers or row labels to populate), and an optional `notes` field describing how rows should be filled. Only include tables when they add clear value to readers (e.g., comparisons, side-by-side features, pricing tiers).
+
+Examples of when to include a table: comparing multiple tools' features/pricing, a step-by-step matrix, or any side-by-side comparison that improves scannability.
 
 The goal is to create content that ranks #1 by providing the most comprehensive, valuable, and user-focused resource on this topic.
 """
@@ -884,6 +898,24 @@ def display_blog_outline(outline_data):
             print(f"   Secondary CTAs: {', '.join(secondary_ctas)}")
         print(f"   Placement: {cta_strategy.get('placement', 'N/A')}")
     
+    # Tables: show any suggested tables from the outline schema
+    tables = blog_outline.get('tables', [])
+    if tables:
+        print(f"\n📋 SUGGESTED TABLES:")
+        for t in tables:
+            title = t.get('table_title', 'Untitled table')
+            section = t.get('preferred_section', 'N/A')
+            columns = t.get('columns', [])
+            row_keys = t.get('row_keys', [])
+            notes = t.get('notes', '')
+            print(f"   - {title} (preferred section: {section})")
+            if columns:
+                print(f"     Columns: {', '.join(columns)}")
+            if row_keys:
+                print(f"     Row keys: {', '.join(row_keys)}")
+            if notes:
+                print(f"     Notes: {notes}")
+
     print(f"\n✅ Blog outline generation complete!")
 
 
@@ -1053,6 +1085,9 @@ E-E-A-T Framework Guidelines:
 
 {competitor_context}
 
+TABLE RENDERING INSTRUCTIONS:
+If the `outline_data` contains a `tables` array, render each table as a markdown table under the `preferred_section` specified for that table. Include the `table_title` as a caption/header above the markdown table and follow any `notes` to populate or format rows. Only render tables that are present in the outline and make sure table content is concise, accurate, and directly useful for comparisons (features, pricing, pros/cons, specs).
+
 WRITING INSTRUCTIONS:
 1. **Focus on User Intent**: The user wants to find the "top 5 AI tools for email marketing" - provide exactly that with clear comparisons and recommendations
 2. **Be Specific**: Include actual features, pricing, use cases, and benefits for each tool
@@ -1061,7 +1096,7 @@ WRITING INSTRUCTIONS:
 5. **Natural Keyword Usage**: Integrate keywords naturally within valuable content
 6. **Expert Voice**: Write with authority based on the E-E-A-T guidelines provided
 
-Write a complete blog post that follows the outline structure but focuses entirely on delivering value to someone specifically looking for the top 5 AI email marketing tools. Make every sentence count toward helping them make the best decision for their needs.Stick to the main content and shorten the lenght of the less important parts like introduction and focus and provide more information about the main sections.Also make sure to include the external links where necessary for example to the tools websites or to relevant articles.
+Write a complete blog post that follows the outline structure but focuses entirely on delivering value to someone specifically looking for the top 5 AI email marketing tools. Make every sentence count toward helping them make the best decision for their needs. Stick to the main content and shorten the length of less important parts like the introduction; provide more information about the main sections. Also include external links where necessary (e.g., tool websites or relevant articles).
 """
 
     try:
