@@ -596,7 +596,7 @@ class SEOBlogGenerator:
     def _generate_final_blog(self, title, outline, target_word_count):
         """STEP 7: Generate final SEO optimized blog using Gemini"""
         if not self.llm:
-            return f"# {title}\n\nBlog generation failed - Gemini not available."
+            return f"<h1>{title}</h1>\n<p>Blog generation failed - Gemini not available.</p>"
         
         try:
             from langchain_core.messages import SystemMessage, HumanMessage
@@ -608,53 +608,73 @@ class SEOBlogGenerator:
             
             final_target = target_word_count or outline_target or 2500
             
-            system_prompt = f"""You are an expert SEO content writer. Write a complete, high-quality blog post in markdown format.
+            system_prompt = f"""You are an expert SEO content writer. Write a complete, high-quality blog post in HTML format.
 
+            CRITICAL OUTPUT FORMAT:
+            - Output ONLY clean HTML markup that goes inside the <body> tag
+            - DO NOT include <body>, </body>, <html>, <head>, or any other wrapper tags
+            - Start directly with content (e.g., <h1>, <p>, <ul>, etc.)
+            - NO markdown syntax (no **, *, #, etc.) - use proper HTML tags only
+            - Use semantic HTML5 tags
+            
             CRITICAL CONTENT STRUCTURE:
             
             1. INTRODUCTION (1-2 paragraphs only):
+               - Use <h1> for the main title: "{title}"
+               - Use <p> tags for paragraphs
                - Brief, engaging hook
                - Quick overview of what readers will learn
-               - Keep it concise and compelling
             
             2. MAIN CONTENT (Detailed with bullet points):
-               - Use H2 headings for major sections
-               - Use H3 headings for subsections
-               - Present information in BULLET POINTS and LISTS wherever possible
-               - Include structured elements like:
-                 * Key Features (as bullet points)
-                 * Pros and Cons (as bullet lists)
-                 * Step-by-step instructions (as numbered lists)
-                 * Comparisons (use tables if helpful)
-                 * Important highlights (bullet points)
-               - Avoid long paragraphs - break into digestible points
-               - Use bold text for emphasis on key terms
-               - Maximum 2-3 sentences per paragraph when prose is needed
+               - Use <h2> for major sections
+               - Use <h3> for subsections
+               - Use <ul> and <li> for bullet points
+               - Use <ol> and <li> for numbered lists
+               - Include structured elements:
+                 * Key Features (as <ul> lists)
+                 * Pros and Cons (as <ul> lists with clear headings)
+                 * Step-by-step instructions (as <ol> lists)
+                 * Comparisons (use <table> with inline CSS for mobile responsiveness)
+               - Use <strong> ONLY for truly important keywords/phrases (be selective, not everything)
+               - Maximum 2-3 sentences per <p> tag
             
-            3. CONCLUSION (1 paragraph only):
-               - Brief summary of key takeaways
-               - Final thoughts or call to action
-               - Keep it concise
+            3. TABLES (if needed for comparisons):
+               - Include this exact inline CSS in the table tag for mobile responsiveness:
+                 <table style="width:100%; border-collapse:collapse; margin:20px 0; display:block; overflow-x:auto; white-space:nowrap;">
+               - Use <thead>, <tbody>, <th>, <td> properly
+               - Add inline styles: border:1px solid #ddd; padding:12px; text-align:left;
             
-            4. FAQ SECTION (3-5 questions):
-               - Add "## Frequently Asked Questions" section
-               - Include 3-5 relevant FAQs based on the topic
-               - Format: **Q: Question here?**
-               - Answer: Brief, clear answer (2-3 sentences max)
+            4. HYPERLINKS (for tools/resources):
+               - Use <a href="URL" rel="nofollow" target="_blank">Tool Name</a>
+               - Always add rel="nofollow" for external tool/resource links
+               - Add target="_blank" to open in new tab
+            
+            5. CONCLUSION (1 paragraph only):
+               - Use <h2>Conclusion</h2>
+               - Brief summary in <p> tags
+               - Call to action if appropriate
+            
+            6. FAQ SECTION (3-5 questions):
+               - Use <h2>Frequently Asked Questions</h2>
+               - For each FAQ use: <h3>Question here?</h3> followed by <p>answer</p>
+               - Keep answers brief (2-3 sentences max)
+            
+            TEXT HIGHLIGHTING RULES:
+            - Use <strong> SPARINGLY - only for 3-5 most important terms/phrases per section
+            - Do NOT highlight every keyword or point
+            - Highlight only: key definitions, critical statistics, main takeaways
+            - Avoid over-highlighting - it reduces impact
             
             FORMATTING REQUIREMENTS:
             - Target word count: {final_target} words (±50 words)
-            - Use markdown bullet points (-) and numbered lists (1., 2., 3.)
-            - Use tables for comparisons where appropriate
-            - Bold (**text**) for key terms and important points
-            - Proper heading hierarchy (H1 → H2 → H3)
+            - Clean, semantic HTML5
+            - No inline CSS except for tables (mobile responsiveness)
             - SEO optimized with strategic keyword placement
             - Professional, scannable format
+            - Proper HTML hierarchy
             
-            OUTPUT FORMAT:
-            - Return ONLY the blog content in clean markdown format
-            - No JSON, no code blocks, no extra commentary
-            - Start with H1 title, followed by structured content"""
+            CRITICAL: Return ONLY the HTML content without <body> tags, markdown syntax, or any wrappers.
+            The output should be ready to copy-paste directly into a CMS body editor."""
             
             human_prompt = f"""Write a complete blog post with title: "{title}"
 
@@ -663,48 +683,96 @@ class SEOBlogGenerator:
             
             TARGET WORD COUNT: {final_target} words
             
-            MANDATORY STRUCTURE:
-            1. **Introduction**: 1-2 short paragraphs introducing the topic
+            MANDATORY HTML STRUCTURE:
             
-            2. **Main Content**: Detailed information presented as:
-               - Bullet points for features, benefits, characteristics
-               - Pros and Cons lists where applicable
-               - Numbered steps for processes
-               - Tables for comparisons
-               - Short 2-3 sentence paragraphs only when narrative is essential
-               - H2 and H3 headings to organize sections
+            <h1>{title}</h1>
             
-            3. **Conclusion**: 1 paragraph summarizing key points
+            <p>Introduction paragraph 1...</p>
+            <p>Introduction paragraph 2 (if needed)...</p>
             
-            4. **FAQ Section**: 3-5 relevant questions and brief answers
+            <h2>Main Section Title</h2>
+            <p>Brief intro to section...</p>
+            <ul>
+              <li>Point 1 with details</li>
+              <li>Point 2 with details</li>
+            </ul>
+            
+            <h3>Subsection if needed</h3>
+            <ol>
+              <li>Step 1</li>
+              <li>Step 2</li>
+            </ol>
+            
+            [If comparison table needed:]
+            <table style="width:100%; border-collapse:collapse; margin:20px 0; display:block; overflow-x:auto; white-space:nowrap;">
+              <thead>
+                <tr>
+                  <th style="border:1px solid #ddd; padding:12px; text-align:left;">Header 1</th>
+                  <th style="border:1px solid #ddd; padding:12px; text-align:left;">Header 2</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="border:1px solid #ddd; padding:12px;">Data 1</td>
+                  <td style="border:1px solid #ddd; padding:12px;">Data 2</td>
+                </tr>
+              </tbody>
+            </table>
+            
+            <h2>Conclusion</h2>
+            <p>Summary paragraph...</p>
+            
+            <h2>Frequently Asked Questions</h2>
+            <h3>Question 1?</h3>
+            <p>Answer 1...</p>
+            <h3>Question 2?</h3>
+            <p>Answer 2...</p>
             
             CONTENT GUIDELINES:
+            - NO markdown syntax - pure HTML only
             - Integrate all keywords naturally from the outline
-            - Address all content gaps identified
-            - Make content highly scannable with visual breaks
-            - Use bold text to highlight important terms
-            - Ensure readability and quick comprehension
-            - Maintain professional, authoritative tone
+            - Add rel="nofollow" to external tool/resource links
+            - Use <strong> sparingly for only the most important 3-5 terms per section
+            - Make content highly scannable
+            - Ensure mobile-responsive tables with inline CSS
+            - Professional, authoritative tone
+            - Ready to copy-paste into WordPress/CMS
             
-            Begin writing the complete blog post now with this precise structure."""
+            IMPORTANT: Generate the COMPLETE blog post with all sections fully written out. Do not use placeholders, ellipsis (...), or [content here] markers. Write every section in full detail from start to finish.
+            
+            Begin writing the complete HTML blog post now. Remember: NO <body> tags, NO markdown syntax."""
             
             response = self.llm.invoke([SystemMessage(content=system_prompt), HumanMessage(content=human_prompt)])
             
-            return response.content
+            # Clean up any potential body tags or markdown that might slip through
+            content = response.content.strip()
+            
+            # Remove body tags if present
+            import re
+            content = re.sub(r'<body[^>]*>|</body>', '', content, flags=re.IGNORECASE)
+            content = re.sub(r'<html[^>]*>|</html>', '', content, flags=re.IGNORECASE)
+            content = re.sub(r'<head[^>]*>.*?</head>', '', content, flags=re.IGNORECASE | re.DOTALL)
+            content = re.sub(r'<!DOCTYPE[^>]*>', '', content, flags=re.IGNORECASE)
+            
+            # Remove markdown code blocks if present
+            content = re.sub(r'```html\n?', '', content)
+            content = re.sub(r'```\n?', '', content)
+            
+            return content.strip()
             
         except Exception as e:
             logger.error(f"Error generating final blog: {e}")
-            return f"# {title}\n\nBlog generation failed: {str(e)}"
+            return f"<h1>{title}</h1>\n<p>Blog generation failed: {str(e)}</p>"
 
     def _normalize_model_output_to_markdown(self, raw_text: str) -> str:
-        """Normalize model output to clean markdown text"""
+        """Normalize model output to clean HTML text"""
         try:
             if not raw_text:
                 return ''
 
             text = raw_text.strip()
 
-            # Remove code fences
+            # Remove code fences (html, markdown, etc.)
             if text.startswith('```') and text.endswith('```'):
                 parts = text.split('\n')
                 if parts and parts[0].startswith('```'):
@@ -712,6 +780,11 @@ class SEOBlogGenerator:
                 if parts and parts[-1].startswith('```'):
                     parts = parts[:-1]
                 text = '\n'.join(parts).strip()
+
+            # Remove any remaining code fence markers
+            import re
+            text = re.sub(r'```html\n?', '', text)
+            text = re.sub(r'```\n?', '', text)
 
             # Try to extract from JSON if present
             if text.startswith('{'):
@@ -726,7 +799,13 @@ class SEOBlogGenerator:
                 except:
                     pass
 
-            return text
+            # Remove body tags if they somehow got included
+            text = re.sub(r'<body[^>]*>|</body>', '', text, flags=re.IGNORECASE)
+            text = re.sub(r'<html[^>]*>|</html>', '', text, flags=re.IGNORECASE)
+            text = re.sub(r'<head[^>]*>.*?</head>', '', text, flags=re.IGNORECASE | re.DOTALL)
+            text = re.sub(r'<!DOCTYPE[^>]*>', '', text, flags=re.IGNORECASE)
+
+            return text.strip()
         except:
             return raw_text if isinstance(raw_text, str) else str(raw_text)
 

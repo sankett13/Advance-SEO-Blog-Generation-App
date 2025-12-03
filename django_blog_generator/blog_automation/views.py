@@ -287,11 +287,41 @@ def download_blog(request, blog_id):
 
 
 def blog_list(request):
-    """List all blog generations"""
+    """List all blog generations with date filtering"""
     blogs = BlogGeneration.objects.all()
+    
+    # Get filter parameters
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    status_filter = request.GET.get('status')
+    
+    # Apply date filters
+    if date_from:
+        try:
+            from datetime import datetime
+            date_from_obj = datetime.strptime(date_from, '%Y-%m-%d')
+            blogs = blogs.filter(created_at__date__gte=date_from_obj.date())
+        except ValueError:
+            messages.warning(request, 'Invalid start date format')
+    
+    if date_to:
+        try:
+            from datetime import datetime
+            date_to_obj = datetime.strptime(date_to, '%Y-%m-%d')
+            blogs = blogs.filter(created_at__date__lte=date_to_obj.date())
+        except ValueError:
+            messages.warning(request, 'Invalid end date format')
+    
+    # Apply status filter
+    if status_filter and status_filter != 'all':
+        blogs = blogs.filter(status=status_filter)
     
     context = {
         'blogs': blogs,
+        'date_from': date_from,
+        'date_to': date_to,
+        'status_filter': status_filter,
+        'status_choices': BlogGeneration.STATUS_CHOICES,
     }
     
     return render(request, 'blog_automation/list.html', context)

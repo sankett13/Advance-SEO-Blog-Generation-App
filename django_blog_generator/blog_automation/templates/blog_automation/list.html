@@ -7,6 +7,57 @@ Generator{% endblock %} {% block content %}
   </a>
 </div>
 
+<!-- Filter Section -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" action="{% url 'blog_automation:blog_list' %}" class="row g-3">
+      <div class="col-md-3">
+        <label for="date_from" class="form-label">
+          <i class="fas fa-calendar-alt me-1"></i>From Date
+        </label>
+        <input 
+          type="date" 
+          class="form-control" 
+          id="date_from" 
+          name="date_from" 
+          value="{{ date_from }}"
+        >
+      </div>
+      <div class="col-md-3">
+        <label for="date_to" class="form-label">
+          <i class="fas fa-calendar-alt me-1"></i>To Date
+        </label>
+        <input 
+          type="date" 
+          class="form-control" 
+          id="date_to" 
+          name="date_to" 
+          value="{{ date_to }}"
+        >
+      </div>
+      <div class="col-md-3">
+        <label for="status" class="form-label">
+          <i class="fas fa-filter me-1"></i>Status
+        </label>
+        <select class="form-select" id="status" name="status">
+          <option value="all" {% if not status_filter or status_filter == 'all' %}selected{% endif %}>All Status</option>
+          {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3 d-flex align-items-end gap-2">
+        <button type="submit" class="btn btn-primary flex-grow-1">
+          <i class="fas fa-search me-1"></i>Filter
+        </button>
+        <a href="{% url 'blog_automation:blog_list' %}" class="btn btn-outline-secondary">
+          <i class="fas fa-times"></i>
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
 {% if blogs %}
 <div class="row">
   {% for blog in blogs %}
@@ -26,11 +77,7 @@ Generator{% endblock %} {% block content %}
         </span>
       </div>
       <div class="card-body">
-        <p class="text-muted small mb-2">
-          <i class="fas fa-key me-1"></i>
-          <strong>Keywords:</strong> {{ blog.primary_keywords|truncatechars:80
-          }}
-        </p>
+        
 
         <div class="row text-muted small mb-3">
           <div class="col-6">
